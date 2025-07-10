@@ -1,0 +1,31 @@
+name: tomatonator
+
+description: Landingpage.
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/landing page/CHERRY TOMATO LOGO-01 1.png
+    - assets/landing page/arrow button.png
+    - assets/onboarding 1/Group 92.png
+    - assets/onboarding 1/arrow button ob1.png
+    - assets/onboarding 2/Group 214.png
+    - assets/onboarding 2/arrow button ob2.png
+    - assets/onboarding 3/Group 10.png
+    - assets/onboarding 3/arrow button ob3.png
+    - assets/onboarding 3/Group_10_resized.png
