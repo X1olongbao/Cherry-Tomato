@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'onboarding3_page.dart';
+import 'get_started_page.dart';
 
 class Onboarding2Page extends StatelessWidget {
-  const Onboarding2Page({Key? key}) : super(key: key);
+  const Onboarding2Page({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +40,7 @@ class Onboarding2Page extends StatelessWidget {
                             width: 24,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: Color(0xFFE53935),
+                              color: const Color(0xFFE53935),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -59,7 +60,10 @@ class Onboarding2Page extends StatelessWidget {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () {
-                          // TODO: Navigate to main/home screen
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const GetStartedPage()),
+                          );
                         },
                         child: const Text(
                           'Skip',
@@ -109,7 +113,7 @@ class Onboarding2Page extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 40),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFE53935),
+                  backgroundColor: const Color(0xFFE53935),
                   shape: const CircleBorder(),
                   padding: const EdgeInsets.all(18),
                   elevation: 4,
