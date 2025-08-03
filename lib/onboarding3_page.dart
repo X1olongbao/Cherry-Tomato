@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'get_started_page.dart';
 
 class Onboarding3Page extends StatelessWidget {
-  const Onboarding3Page({Key? key}) : super(key: key);
+  const Onboarding3Page({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +48,7 @@ class Onboarding3Page extends StatelessWidget {
                             width: 24,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: Color(0xFFE53935),
+                              color: const Color(0xFFE53935),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -58,7 +59,11 @@ class Onboarding3Page extends StatelessWidget {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () {
-                          // TODO: Navigate to main/home screen
+                          // Navigate to the next page
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const GetStartedPage()),
+                          );
                         },
                         child: const Text(
                           'Skip',
@@ -108,13 +113,16 @@ class Onboarding3Page extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 40),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFE53935),
+                  backgroundColor: const Color(0xFFE53935),
                   shape: const CircleBorder(),
                   padding: const EdgeInsets.all(18),
                   elevation: 4,
                 ),
                 onPressed: () {
-                  // TODO: Add navigation to the next page or main screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const GetStartedPage()),
+                  );
                 },
                 child: Image.asset(
                   'assets/onboarding 3/arrow button ob3.png',

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'onboarding1_page.dart';
 
 class LandingPage extends StatelessWidget {
-  const LandingPage({Key? key}) : super(key: key);
+  const LandingPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +50,7 @@ class LandingPage extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 40),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFE53935),
+                  backgroundColor: const Color(0xFFE53935),
                   shape: const CircleBorder(),
                   padding: const EdgeInsets.all(18),
                   elevation: 4,
