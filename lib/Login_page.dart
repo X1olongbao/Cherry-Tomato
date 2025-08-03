@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'Homepage.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -136,7 +137,12 @@ class LoginPage extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {}, // sasusunod ka na logic
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const Homepage()),
+                      );
+                    }, // sasusunod ka na logic
                     style: ElevatedButton.styleFrom(
                       backgroundColor: tomatoRed.withOpacity(0.2),
                       foregroundColor: tomatoRed,
