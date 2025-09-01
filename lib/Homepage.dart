@@ -110,47 +110,43 @@ class Homepage extends StatelessWidget {
           ),
         ),
       ),
-
-      // Bottom Navigation with custom assets
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/Homepage/Rectangle.png"),
-            fit: BoxFit.cover,
+      // Bottom Navigation Bar
+      bottomNavigationBar: BottomAppBar(
+        color: Colors.white,
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8.0,
+        child: SizedBox(
+          height: 70,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Image.asset("assets/Homepage/Home icon.png", width: 28),
+              Image.asset("assets/Homepage/calendar icon.png", width: 28),
+              const SizedBox(width: 40), // space for center button
+              Image.asset("assets/Homepage/stats icon.png", width: 28),
+              Image.asset("assets/Homepage/profile icon.png", width: 28),
+            ],
           ),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            Image.asset("assets/Homepage/Home icon.png", width: 28),
-            Image.asset("assets/Homepage/calendar icon.png", width: 28),
-            
-            // Center floating tomato icon
-            Container(
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(8),
-              child: Image.asset(
-                "assets/Homepage/pomodoro timer icon.png",
-                width: 40,
-              ),
-            ),
-            
-            Image.asset("assets/Homepage/stats icon.png", width: 28),
-            Image.asset("assets/Homepage/profile icon.png", width: 28),
-          ],
+      ),
+
+      // Floating Pomodoro Button
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.white,
+        elevation: 6,
+        shape: const CircleBorder(),
+        onPressed: () {
+          // TODO: start pomodoro
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Image.asset(
+            "assets/Homepage/pomodoro timer icon.png",
+            width: 36,
+          ),
         ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 }
