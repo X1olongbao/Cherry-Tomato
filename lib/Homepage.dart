@@ -36,8 +36,6 @@ class _HomepageState extends State<Homepage> {
   // ✅ Helper function to convert "August 8, 2025" → "8/8/2025"
   String _formatDate(String longDate) {
     final parts = longDate.replaceAll(',', '').split(' ');
-    // Example: ["August", "8", "2025"]
-
     final monthNames = {
       "January": 1,
       "February": 2,
@@ -58,6 +56,24 @@ class _HomepageState extends State<Homepage> {
     final year = parts[2];
 
     return "$month/$day/$year"; // → 8/8/2025
+  }
+
+  // ✅ Motivational message depending on tasks & progress
+  String _getMotivationalMessage() {
+    if (_tasks.isEmpty) {
+      return "Welcome! Ready to start your first goal?";
+    }
+
+    final completed = _tasks.where((t) => t.isDone).length;
+    final total = _tasks.length;
+
+    if (completed == 0) {
+      return "Great start! Let’s get some work done!";
+    } else if (completed < total) {
+      return "Keep going, you're making progress!";
+    } else {
+      return "Awesome! All tasks completed 🎉";
+    }
   }
 
   @override
@@ -92,7 +108,7 @@ class _HomepageState extends State<Homepage> {
               ),
               const SizedBox(height: 24),
 
-              // Welcome card
+              // Welcome card with dynamic message
               Center(
                 child: Container(
                   width: double.infinity,
@@ -113,10 +129,10 @@ class _HomepageState extends State<Homepage> {
                     children: [
                       Image.asset('assets/Homepage/goal.png', width: 56),
                       const SizedBox(width: 16),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Welcome! Ready to start your first goal?',
-                          style: TextStyle(
+                          _getMotivationalMessage(),
+                          style: const TextStyle(
                               fontSize: 16,
                               color: Colors.black,
                               fontWeight: FontWeight.w500),
@@ -168,132 +184,146 @@ class _HomepageState extends State<Homepage> {
                   itemCount: _tasks.length,
                   itemBuilder: (context, i) {
                     final task = _tasks[i];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: const [
-                          BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 6,
-                              offset: Offset(0, 2))
-                        ],
-                        color: Colors.white,
-                      ),
-                      child: Row(
-                        children: [
-                          // ✅ Bookmark strip (curved left side)
-                          Container(
-                            width: 10,
-                            height: 80, // match card height
-                            decoration: BoxDecoration(
-                              color: task.priority == "High"
-                                  ? Colors.red
-                                  : task.priority == "Medium"
-                                      ? Colors.orange
-                                      : Colors.blue,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(12),
-                                bottomLeft: Radius.circular(12),
+                    return GestureDetector(
+                      onTap: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CreateNewTaskPage(task: task),
+                          ),
+                        );
+
+                        if (result is Task) {
+                          setState(() => _tasks[i] = result); // Edit
+                        } else if (result == "delete") {
+                          setState(() => _tasks.removeAt(i)); // Delete
+                        }
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: const [
+                            BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 6,
+                                offset: Offset(0, 2))
+                          ],
+                          color: Colors.white,
+                        ),
+                        child: Row(
+                          children: [
+                            // ✅ Bookmark strip
+                            Container(
+                              width: 10,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: task.priority == "High"
+                                    ? Colors.red
+                                    : task.priority == "Medium"
+                                        ? Colors.orange
+                                        : Colors.blue,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(12),
+                                  bottomLeft: Radius.circular(12),
+                                ),
                               ),
                             ),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              child: Row(
-                                children: [
-                                  Checkbox(
-                                    value: task.isDone,
-                                    onChanged: (val) {
-                                      setState(
-                                          () => task.isDone = val ?? false);
-                                    },
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          task.title,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 16,
-                                            color: Colors.black,
-                                            decoration: task.isDone
-                                                ? TextDecoration.lineThrough
-                                                : TextDecoration.none,
-                                            decorationThickness: 2,
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Checkbox(
+                                      value: task.isDone,
+                                      onChanged: (val) {
+                                        setState(
+                                            () => task.isDone = val ?? false);
+                                      },
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            task.title,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
+                                              color: Colors.black,
+                                              decoration: task.isDone
+                                                  ? TextDecoration.lineThrough
+                                                  : TextDecoration.none,
+                                              decorationThickness: 2,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.calendar_today,
-                                                color: Colors.amber, size: 16),
-                                            const SizedBox(width: 4),
-
-                                            // ✅ Date formatted to m/d/yyyy here
-                                            Text(
-                                              _formatDate(task.date),
-                                              style: const TextStyle(
-                                                  color: Colors.amber),
-                                            ),
-
-                                            const SizedBox(width: 12),
-                                            Icon(
-                                              task.priority == "High"
-                                                  ? Icons.warning_amber_rounded
-                                                  : task.priority == "Medium"
-                                                      ? Icons.bolt
-                                                      : Icons
-                                                          .arrow_downward_rounded,
-                                              color: task.priority == "High"
-                                                  ? Colors.red
-                                                  : task.priority == "Medium"
-                                                      ? Colors.orange
-                                                      : Colors.blue,
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              task.priority,
-                                              style: TextStyle(
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.calendar_today,
+                                                  color: Colors.amber,
+                                                  size: 16),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                _formatDate(task.date),
+                                                style: const TextStyle(
+                                                    color: Colors.amber),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Icon(
+                                                task.priority == "High"
+                                                    ? Icons
+                                                        .warning_amber_rounded
+                                                    : task.priority == "Medium"
+                                                        ? Icons.bolt
+                                                        : Icons
+                                                            .arrow_downward_rounded,
                                                 color: task.priority == "High"
                                                     ? Colors.red
                                                     : task.priority == "Medium"
                                                         ? Colors.orange
                                                         : Colors.blue,
+                                                size: 16,
                                               ),
-                                            ),
-
-                                            // ✅ Show subtasks only if total > 0
-                                            if (task.totalSubtasks > 0) ...[
-                                              const SizedBox(width: 12),
+                                              const SizedBox(width: 4),
                                               Text(
-                                                "Subtask: ${task.completedSubtasks}/${task.totalSubtasks}",
-                                                style: const TextStyle(
-                                                    color: Colors.green),
+                                                task.priority,
+                                                style: TextStyle(
+                                                  color: task.priority == "High"
+                                                      ? Colors.red
+                                                      : task.priority ==
+                                                              "Medium"
+                                                          ? Colors.orange
+                                                          : Colors.blue,
+                                                ),
                                               ),
+                                              if (task.totalSubtasks > 0) ...[
+                                                const SizedBox(width: 12),
+                                                Text(
+                                                  "Subtask: ${task.completedSubtasks}/${task.totalSubtasks}",
+                                                  style: const TextStyle(
+                                                      color: Colors.green),
+                                                ),
+                                              ],
                                             ],
-                                          ],
-                                        ),
-                                      ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  const Icon(Icons.play_arrow,
-                                      color: Colors.red, size: 28),
-                                ],
+                                    const Icon(Icons.play_arrow,
+                                        color: Colors.red, size: 28),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     );
                   },
