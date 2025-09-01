@@ -26,11 +26,11 @@ class Homepage extends StatelessWidget {
                     height: 56,
                     fit: BoxFit.contain,
                   ),
-                  Icon(Icons.notifications_none, color: Colors.black, size: 32),
+                  const Icon(Icons.notifications_none, color: Colors.black, size: 32),
                 ],
               ),
               const SizedBox(height: 12),
-              
+
               const Text(
                 'Hi there, User',
                 style: TextStyle(
@@ -40,11 +40,11 @@ class Homepage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-            
+
               Center(
                 child: Container(
                   width: double.infinity,
-                  constraints: BoxConstraints(maxWidth: 400),
+                  constraints: const BoxConstraints(maxWidth: 400),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
@@ -79,7 +79,7 @@ class Homepage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -93,7 +93,7 @@ class Homepage extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {
-                      //create new task
+                      // create new task
                     },
                     child: const Text(
                       'Add Task',
@@ -108,6 +108,47 @@ class Homepage extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+
+      // Bottom Navigation with custom assets
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage("assets/Homepage/Rectangle.png"),
+            fit: BoxFit.cover,
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            Image.asset("assets/Homepage/Home icon.png", width: 28),
+            Image.asset("assets/Homepage/calendar icon.png", width: 28),
+            
+            // Center floating tomato icon
+            Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 6,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(8),
+              child: Image.asset(
+                "assets/Homepage/pomodoro timer icon.png",
+                width: 40,
+              ),
+            ),
+            
+            Image.asset("assets/Homepage/stats icon.png", width: 28),
+            Image.asset("assets/Homepage/profile icon.png", width: 28),
+          ],
         ),
       ),
     );
