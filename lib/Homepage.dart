@@ -2,9 +2,22 @@ import 'package:flutter/material.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
-class Homepage extends StatelessWidget {
+
+class Homepage extends StatefulWidget {
   const Homepage({super.key});
 
+  @override
+  State<Homepage> createState() => _HomepageState();
+}
+
+class _HomepageState extends State<Homepage> {
+  int _selectedIndex = 0; // 🔹 Track which icon is active
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -120,33 +133,47 @@ class Homepage extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              Image.asset("assets/Homepage/Home icon.png", width: 28),
-              Image.asset("assets/Homepage/calendar icon.png", width: 28),
+              _buildNavItem("assets/Homepage/Home icon2.png", 0),
+              _buildNavItem("assets/Homepage/calendar icon.png", 1),
               const SizedBox(width: 40), // space for center button
-              Image.asset("assets/Homepage/stats icon.png", width: 28),
-              Image.asset("assets/Homepage/profile icon.png", width: 28),
+              _buildNavItem("assets/Homepage/stats icon.png", 2),
+              _buildNavItem("assets/Homepage/profile icon.png", 3),
             ],
           ),
         ),
       ),
 
-      // Floating Pomodoro Button
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.white,
-        elevation: 6,
-        shape: const CircleBorder(),
-        onPressed: () {
-          // TODO: start pomodoro
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Image.asset(
-            "assets/Homepage/pomodoro timer icon.png",
-            width: 36,
+      // 🔹 Floating Pomodoro Button
+      floatingActionButton: SizedBox(
+      width: 90,   // make button wider
+      height: 90,  // make button taller
+      child: FloatingActionButton(
+      backgroundColor: Colors.white,
+      elevation: 3,
+      shape: const CircleBorder(),
+      onPressed: () {
+      // TODO: start pomodoro
+      },
+    child: Image.asset(
+      "assets/Homepage/pomodoro timer icon.png",
+      fit: BoxFit.contain,
           ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
+
+  // 🔹 Reusable nav item builder
+  Widget _buildNavItem(String asset, int index) {
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      child: Image.asset(
+        asset,
+        width: 28,
+        color: _selectedIndex == index ? tomatoRed : Colors.black54, // 🔹 red when selected
+      ),
+    );
+  }
 }
+    
