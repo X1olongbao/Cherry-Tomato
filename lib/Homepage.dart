@@ -31,13 +31,12 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
+  int _selectedIndex = 0; // Track which icon is active
   final List<Task> _tasks = [];
 
-  // ✅ Helper function to convert "August 8, 2025" → "8/8/2025"
+  // Helper function to convert "August 8, 2025" → "8/8/2025"
   String _formatDate(String longDate) {
     final parts = longDate.replaceAll(',', '').split(' ');
-    // Example: ["August", "8", "2025"]
-
     final monthNames = {
       "January": 1,
       "February": 2,
@@ -52,12 +51,16 @@ class _HomepageState extends State<Homepage> {
       "November": 11,
       "December": 12,
     };
-
     final month = monthNames[parts[0]] ?? 1;
     final day = parts[1];
     final year = parts[2];
+    return "$month/$day/$year";
+  }
 
-    return "$month/$day/$year"; // → 8/8/2025
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   @override
@@ -74,10 +77,13 @@ class _HomepageState extends State<Homepage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset('assets/Homepage/tiny tomato.png',
-                      width: 56, height: 56),
-                  const Icon(Icons.notifications_none,
-                      color: Colors.black, size: 32),
+                  Image.asset(
+                    'assets/Homepage/tiny tomato.png',
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.contain,
+                  ),
+                  const Icon(Icons.notifications_none, color: Colors.black, size: 32),
                 ],
               ),
               const SizedBox(height: 12),
@@ -182,7 +188,7 @@ class _HomepageState extends State<Homepage> {
                       ),
                       child: Row(
                         children: [
-                          // ✅ Bookmark strip (curved left side)
+                          // Bookmark strip (curved left side)
                           Container(
                             width: 10,
                             height: 80, // match card height
@@ -239,7 +245,7 @@ class _HomepageState extends State<Homepage> {
                                                 color: Colors.amber, size: 16),
                                             const SizedBox(width: 4),
 
-                                            // ✅ Date formatted to m/d/yyyy here
+                                            // Date formatted to m/d/yyyy here
                                             Text(
                                               _formatDate(task.date),
                                               style: const TextStyle(
@@ -273,7 +279,7 @@ class _HomepageState extends State<Homepage> {
                                               ),
                                             ),
 
-                                            // ✅ Show subtasks only if total > 0
+                                            // Show subtasks only if total > 0
                                             if (task.totalSubtasks > 0) ...[
                                               const SizedBox(width: 12),
                                               Text(
@@ -302,6 +308,56 @@ class _HomepageState extends State<Homepage> {
             ],
           ),
         ),
+      ),
+      // Bottom Navigation Bar
+      bottomNavigationBar: BottomAppBar(
+        color: Colors.white,
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8.0,
+        child: SizedBox(
+          height: 70,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem("assets/Homepage/Home icon.png", 0),
+              _buildNavItem("assets/Homepage/calendar icon.png", 1),
+              const SizedBox(width: 40), // space for center button
+              _buildNavItem("assets/Homepage/stats icon.png", 2),
+              _buildNavItem("assets/Homepage/profile icon.png", 3),
+            ],
+          ),
+        ),
+      ),
+
+      // Floating Pomodoro Button
+      floatingActionButton: SizedBox(
+        width: 90,
+        height: 90,
+        child: FloatingActionButton(
+          backgroundColor: Colors.white,
+          elevation: 3,
+          shape: const CircleBorder(),
+          onPressed: () {
+            // TODO: start pomodoro
+          },
+          child: Image.asset(
+            "assets/Homepage/pomodoro timer icon.png",
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+
+  // Reusable nav item builder
+  Widget _buildNavItem(String asset, int index) {
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      child: Image.asset(
+        asset,
+        width: 28,
+        color: _selectedIndex == index ? tomatoRed : Colors.black54,
       ),
     );
   }
