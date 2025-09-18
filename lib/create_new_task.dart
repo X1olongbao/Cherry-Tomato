@@ -1,5 +1,24 @@
 import 'package:flutter/material.dart';
-import 'Homepage.dart';
+
+// Local Task model duplicated from homepage.dart (consider consolidating later)
+class Task {
+  final String title;
+  final String date;
+  final String priority;
+  final String time;
+  final int completedSubtasks;
+  final int totalSubtasks;
+  final bool isDone;
+  const Task({
+    required this.title,
+    required this.date,
+    required this.priority,
+    required this.time,
+    required this.completedSubtasks,
+    required this.totalSubtasks,
+    this.isDone = false,
+  });
+}
 
 class CreateNewTaskPage extends StatefulWidget {
   const CreateNewTaskPage({super.key});
@@ -16,6 +35,8 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
   String _minute = "00";
   String _period = "AM";
   final List<Map<String, dynamic>> _subtasks = [];
+
+  // (Task model defined at top level)
 
   @override
   Widget build(BuildContext context) {

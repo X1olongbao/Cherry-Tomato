@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:tomatonator/create_new_task.dart';
+import 'create_new_task.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -34,7 +34,6 @@ class _HomepageState extends State<Homepage> {
   int _selectedIndex = 0; // Track which icon is active
   final List<Task> _tasks = [];
 
-  // Helper function to convert "August 8, 2025" → "8/8/2025"
   String _formatDate(String longDate) {
     final parts = longDate.replaceAll(',', '').split(' ');
     final monthNames = {
@@ -57,11 +56,7 @@ class _HomepageState extends State<Homepage> {
     return "$month/$day/$year";
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
   @override
   Widget build(BuildContext context) {
@@ -73,32 +68,16 @@ class _HomepageState extends State<Homepage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top bar
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset(
-                    'assets/Homepage/tiny tomato.png',
-                    width: 56,
-                    height: 56,
-                    fit: BoxFit.contain,
-                  ),
+                  Image.asset('assets/Homepage/tiny tomato.png', width: 56, height: 56, fit: BoxFit.contain),
                   const Icon(Icons.notifications_none, color: Colors.black, size: 32),
                 ],
               ),
               const SizedBox(height: 12),
-
-              const Text(
-                "Hi there, User",
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
+              const Text('Hi there, User', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black)),
               const SizedBox(height: 24),
-
-              // Welcome card
               Center(
                 child: Container(
                   width: double.infinity,
@@ -106,69 +85,40 @@ class _HomepageState extends State<Homepage> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: const [
-                      BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 8,
-                          offset: Offset(0, 2)),
-                    ],
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))],
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                   child: Row(
                     children: [
                       Image.asset('assets/Homepage/goal.png', width: 56),
                       const SizedBox(width: 16),
                       const Expanded(
-                        child: Text(
-                          'Welcome! Ready to start your first goal?',
-                          style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.black,
-                              fontWeight: FontWeight.w500),
-                        ),
+                        child: Text('Welcome! Ready to start your first goal?', style: TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.w500)),
                       ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 32),
-
-              // Tasks header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Tasks (${_tasks.length})',
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black),
-                  ),
+                  Text('Tasks (${_tasks.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
                   TextButton(
                     onPressed: () async {
                       final newTask = await Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: (context) => const CreateNewTaskPage()),
+                        MaterialPageRoute(builder: (context) => const CreateNewTaskPage()),
                       );
                       if (newTask != null && newTask is Task) {
                         setState(() => _tasks.add(newTask));
                       }
                     },
-                    child: const Text(
-                      'Add Task',
-                      style: TextStyle(
-                          color: tomatoRed,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16),
-                    ),
+                    child: const Text('Add Task', style: TextStyle(color: tomatoRed, fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-
-              // Task list
               Expanded(
                 child: ListView.builder(
                   itemCount: _tasks.length,
@@ -178,53 +128,38 @@ class _HomepageState extends State<Homepage> {
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: const [
-                          BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 6,
-                              offset: Offset(0, 2))
-                        ],
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
                         color: Colors.white,
                       ),
                       child: Row(
                         children: [
-                          // Bookmark strip (curved left side)
                           Container(
                             width: 10,
-                            height: 80, // match card height
+                            height: 80,
                             decoration: BoxDecoration(
                               color: task.priority == "High"
                                   ? Colors.red
                                   : task.priority == "Medium"
                                       ? Colors.orange
                                       : Colors.blue,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(12),
-                                bottomLeft: Radius.circular(12),
-                              ),
+                              borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
                             ),
                           ),
                           Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               child: Row(
                                 children: [
                                   Checkbox(
                                     value: task.isDone,
-                                    onChanged: (val) {
-                                      setState(
-                                          () => task.isDone = val ?? false);
-                                    },
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
+                                    onChanged: (val) => setState(() => task.isDone = val ?? false),
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                     visualDensity: VisualDensity.compact,
                                   ),
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           task.title,
@@ -232,34 +167,23 @@ class _HomepageState extends State<Homepage> {
                                             fontWeight: FontWeight.w600,
                                             fontSize: 16,
                                             color: Colors.black,
-                                            decoration: task.isDone
-                                                ? TextDecoration.lineThrough
-                                                : TextDecoration.none,
+                                            decoration: task.isDone ? TextDecoration.lineThrough : TextDecoration.none,
                                             decorationThickness: 2,
                                           ),
                                         ),
                                         const SizedBox(height: 4),
                                         Row(
                                           children: [
-                                            const Icon(Icons.calendar_today,
-                                                color: Colors.amber, size: 16),
+                                            const Icon(Icons.calendar_today, color: Colors.amber, size: 16),
                                             const SizedBox(width: 4),
-
-                                            // Date formatted to m/d/yyyy here
-                                            Text(
-                                              _formatDate(task.date),
-                                              style: const TextStyle(
-                                                  color: Colors.amber),
-                                            ),
-
+                                            Text(_formatDate(task.date), style: const TextStyle(color: Colors.amber)),
                                             const SizedBox(width: 12),
                                             Icon(
                                               task.priority == "High"
                                                   ? Icons.warning_amber_rounded
                                                   : task.priority == "Medium"
                                                       ? Icons.bolt
-                                                      : Icons
-                                                          .arrow_downward_rounded,
+                                                      : Icons.arrow_downward_rounded,
                                               color: task.priority == "High"
                                                   ? Colors.red
                                                   : task.priority == "Medium"
@@ -278,23 +202,16 @@ class _HomepageState extends State<Homepage> {
                                                         : Colors.blue,
                                               ),
                                             ),
-
-                                            // Show subtasks only if total > 0
                                             if (task.totalSubtasks > 0) ...[
                                               const SizedBox(width: 12),
-                                              Text(
-                                                "Subtask: ${task.completedSubtasks}/${task.totalSubtasks}",
-                                                style: const TextStyle(
-                                                    color: Colors.green),
-                                              ),
+                                              Text("Subtask: ${task.completedSubtasks}/${task.totalSubtasks}", style: const TextStyle(color: Colors.green)),
                                             ],
                                           ],
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.play_arrow,
-                                      color: Colors.red, size: 28),
+                                  const Icon(Icons.play_arrow, color: Colors.red, size: 28),
                                 ],
                               ),
                             ),
@@ -304,12 +221,11 @@ class _HomepageState extends State<Homepage> {
                     );
                   },
                 ),
-              )
+              ),
             ],
           ),
         ),
       ),
-      // Bottom Navigation Bar
       bottomNavigationBar: BottomAppBar(
         color: Colors.white,
         shape: const CircularNotchedRectangle(),
@@ -321,15 +237,13 @@ class _HomepageState extends State<Homepage> {
             children: [
               _buildNavItem("assets/Homepage/Home icon.png", 0),
               _buildNavItem("assets/Homepage/calendar icon.png", 1),
-              const SizedBox(width: 40), // space for center button
+              const SizedBox(width: 40),
               _buildNavItem("assets/Homepage/stats icon.png", 2),
               _buildNavItem("assets/Homepage/profile icon.png", 3),
             ],
           ),
         ),
       ),
-
-      // Floating Pomodoro Button
       floatingActionButton: SizedBox(
         width: 90,
         height: 90,
@@ -337,28 +251,16 @@ class _HomepageState extends State<Homepage> {
           backgroundColor: Colors.white,
           elevation: 3,
           shape: const CircleBorder(),
-          onPressed: () {
-            // TODO: start pomodoro
-          },
-          child: Image.asset(
-            "assets/Homepage/pomodoro timer icon.png",
-            fit: BoxFit.contain,
-          ),
+          onPressed: () {},
+          child: Image.asset("assets/Homepage/pomodoro timer icon.png", fit: BoxFit.contain),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
-  // Reusable nav item builder
-  Widget _buildNavItem(String asset, int index) {
-    return GestureDetector(
-      onTap: () => _onItemTapped(index),
-      child: Image.asset(
-        asset,
-        width: 28,
-        color: _selectedIndex == index ? tomatoRed : Colors.black54,
-      ),
-    );
-  }
+  Widget _buildNavItem(String asset, int index) => GestureDetector(
+        onTap: () => _onItemTapped(index),
+        child: Image.asset(asset, width: 28, color: _selectedIndex == index ? tomatoRed : Colors.black54),
+      );
 }
