@@ -1,27 +1,10 @@
 import 'package:flutter/material.dart';
-
-// Local Task model duplicated from homepage.dart (consider consolidating later)
-class Task {
-  final String title;
-  final String date;
-  final String priority;
-  final String time;
-  final int completedSubtasks;
-  final int totalSubtasks;
-  final bool isDone;
-  const Task({
-    required this.title,
-    required this.date,
-    required this.priority,
-    required this.time,
-    required this.completedSubtasks,
-    required this.totalSubtasks,
-    this.isDone = false,
-  });
-}
+import 'homepage.dart';
 
 class CreateNewTaskPage extends StatefulWidget {
-  const CreateNewTaskPage({super.key});
+  final Task? task; // ✅ optional task for edit mode
+
+  const CreateNewTaskPage({super.key, this.task});
 
   @override
   State<CreateNewTaskPage> createState() => _CreateNewTaskPageState();
@@ -36,7 +19,29 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
   String _period = "AM";
   final List<Map<String, dynamic>> _subtasks = [];
 
-  // (Task model defined at top level)
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.task != null) {
+      _title.text = widget.task!.title;
+      _date.text = widget.task!.date;
+      _priority = widget.task!.priority;
+
+      final parts = widget.task!.time.split(" ");
+      final hm = parts[0].split(":");
+      _hour = hm[0];
+      _minute = hm[1];
+      _period = parts[1];
+
+      for (int i = 0; i < widget.task!.totalSubtasks; i++) {
+        _subtasks.add({
+          "text": "Subtask ${i + 1}",
+          "done": i < widget.task!.completedSubtasks,
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,14 +54,23 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          "Create New Task",
-          style: TextStyle(
+        title: Text(
+          widget.task == null ? "Create New Task" : "Edit Task",
+          style: const TextStyle(
             color: Colors.black,
             fontSize: 30,
             fontWeight: FontWeight.bold,
           ),
         ),
+        actions: [
+          if (widget.task != null)
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () {
+                Navigator.pop(context, "delete"); // return delete signal
+              },
+            ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -110,8 +124,7 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       ),
       style: const TextStyle(color: Colors.black, fontSize: 14),
     );
@@ -128,8 +141,7 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       ),
       style: const TextStyle(color: Colors.black, fontSize: 14),
       onTap: () async {
@@ -191,7 +203,7 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
           ),
           onChanged: (val) => setState(() => _minute = val!),
         ),
-        const SizedBox(width: 8),
+  const SizedBox(width: 8),
         DropdownButton<String>(
           value: _period,
           items: ["AM", "PM"]
@@ -291,12 +303,13 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
             time: "$_hour:${_minute.toString().padLeft(2, '0')} $_period",
             completedSubtasks: _subtasks.where((s) => s["done"]).length,
             totalSubtasks: _subtasks.length,
+            isDone: widget.task?.isDone ?? false,
           );
           Navigator.pop(context, newTask);
         },
-        child: const Text(
-          "Create New Task",
-          style: TextStyle(color: Colors.white, fontSize: 16),
+        child: Text(
+          widget.task == null ? "Create New Task" : "Save Changes",
+          style: const TextStyle(color: Colors.white, fontSize: 16),
         ),
       ),
     );
