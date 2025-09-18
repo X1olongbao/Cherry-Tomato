@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'Login_page.dart';
+import 'login_page.dart';
+import 'sign_up_page.dart';
 
 class GetStartedPage extends StatelessWidget {
   const GetStartedPage({super.key});
@@ -62,7 +63,10 @@ class GetStartedPage extends StatelessWidget {
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () {
-                    // TODO: Navigate to signup
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SignUpPage()),
+                      );
                   },
                   child: const Text(
                     'Sign up',
