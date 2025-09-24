@@ -1,6 +1,6 @@
 name: tomatonator
 
-description: Landingpage.
+description: PomodoroApp.
 
 version: 1.0.0+1
 
@@ -18,7 +18,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.1
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
@@ -37,3 +37,10 @@ flutter:
     - assets/Homepage/goal.png
     - assets/Homepage/tiny tomato.png
     - assets/Homepage/vector.png
+    - assets/Homepage/calendar icon.png
+    - assets/Homepage/Home icon.png
+    - assets/Homepage/pomodoro timer icon.png
+    - assets/Homepage/stats icon.png
+    - assets/Homepage/profile icon.png
+    - assets/Homepage/Rectangle.png
+    - assets/Homepage/Home icon2.png
