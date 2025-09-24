@@ -32,10 +32,9 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
-  int _selectedIndex = 0; // Track which page is active
+  int _selectedIndex = 0;
   final List<Task> _tasks = [];
 
-  // ✅ Date formatter (e.g. "August 8, 2025" → "8/8/2025")
   String _formatDate(String longDate) {
     final parts = longDate.replaceAll(',', '').split(' ');
     final monthNames = {
@@ -58,13 +57,8 @@ class _HomepageState extends State<Homepage> {
     return "$month/$day/$year";
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
-  // ✅ Motivational message depending on tasks & progress
   String _getMotivationalMessage() {
     if (_tasks.isEmpty) {
       return "Welcome! Ready to start your first goal?";
@@ -86,14 +80,12 @@ class _HomepageState extends State<Homepage> {
   Widget build(BuildContext context) {
     final List<Widget> pages = [
       _buildHomePage(context),
-      CalendarPage(tasks: _tasks), // ✅ pass tasks to calendar
+      CalendarPage(tasks: _tasks), // ✅ fixed call
     ];
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(child: pages[_selectedIndex]),
-
-      // Bottom Navigation Bar
       bottomNavigationBar: BottomAppBar(
         color: Colors.white,
         shape: const CircularNotchedRectangle(),
@@ -105,15 +97,13 @@ class _HomepageState extends State<Homepage> {
             children: [
               _buildNavItem("assets/Homepage/Home icon.png", 0),
               _buildNavItem("assets/Homepage/calendar icon.png", 1),
-              const SizedBox(width: 40), // space for center button
+              const SizedBox(width: 40),
               _buildNavItem("assets/Homepage/stats icon.png", 2),
               _buildNavItem("assets/Homepage/profile icon.png", 3),
             ],
           ),
         ),
       ),
-
-      // Floating Pomodoro Button
       floatingActionButton: SizedBox(
         width: 90,
         height: 90,
@@ -121,9 +111,7 @@ class _HomepageState extends State<Homepage> {
           backgroundColor: Colors.white,
           elevation: 3,
           shape: const CircleBorder(),
-          onPressed: () {
-            // TODO: start pomodoro
-          },
+          onPressed: () {},
           child: Image.asset(
             "assets/Homepage/pomodoro timer icon.png",
             fit: BoxFit.contain,
@@ -134,14 +122,12 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
-  // ✅ Homepage UI (moved into its own widget for switching)
   Widget _buildHomePage(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top bar
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -156,7 +142,6 @@ class _HomepageState extends State<Homepage> {
             ],
           ),
           const SizedBox(height: 12),
-
           const Text(
             "Hi there, User",
             style: TextStyle(
@@ -166,8 +151,6 @@ class _HomepageState extends State<Homepage> {
             ),
           ),
           const SizedBox(height: 24),
-
-          // Welcome card with dynamic message
           Center(
             child: Container(
               width: double.infinity,
@@ -201,8 +184,6 @@ class _HomepageState extends State<Homepage> {
             ),
           ),
           const SizedBox(height: 32),
-
-          // Tasks header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -218,7 +199,8 @@ class _HomepageState extends State<Homepage> {
                   final newTask = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (context) => const CreateNewTaskPage()),
+                      builder: (context) => const CreateNewTaskPage(),
+                    ),
                   );
                   if (newTask != null && newTask is Task) {
                     setState(() => _tasks.add(newTask));
@@ -235,8 +217,6 @@ class _HomepageState extends State<Homepage> {
             ],
           ),
           const SizedBox(height: 12),
-
-          // Task list
           Expanded(
             child: ListView.builder(
               itemCount: _tasks.length,
@@ -247,14 +227,15 @@ class _HomepageState extends State<Homepage> {
                     final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => CreateNewTaskPage(task: task),
+                        builder: (context) =>
+                            CreateNewTaskPage(task: task), // ✅ fixed call
                       ),
                     );
 
                     if (result is Task) {
-                      setState(() => _tasks[i] = result); // Edit
+                      setState(() => _tasks[i] = result);
                     } else if (result == "delete") {
-                      setState(() => _tasks.removeAt(i)); // Delete
+                      setState(() => _tasks.removeAt(i));
                     }
                   },
                   child: _buildTaskCard(task),
@@ -267,7 +248,6 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
-  // ✅ Task card UI
   Widget _buildTaskCard(Task task) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -382,15 +362,12 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
-  // Reusable nav item builder
-  Widget _buildNavItem(String asset, int index) {
-    return GestureDetector(
-      onTap: () => _onItemTapped(index),
-      child: Image.asset(
-        asset,
-        width: 28,
-        color: _selectedIndex == index ? tomatoRed : Colors.black54,
-      ),
-    );
-  }
+  Widget _buildNavItem(String asset, int index) => GestureDetector(
+        onTap: () => _onItemTapped(index),
+        child: Image.asset(
+          asset,
+          width: 28,
+          color: _selectedIndex == index ? tomatoRed : Colors.black54,
+        ),
+      );
 }
