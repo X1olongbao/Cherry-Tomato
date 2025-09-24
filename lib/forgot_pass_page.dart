@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'email_otp_page.dart';
 
+
+
 const Color tomatoRed = Color(0xFFE53935);
 
 class ForgotPasswordPage extends StatefulWidget {
@@ -37,7 +39,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     if (!_validEmail) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => EmailOtpPage(email: _emailCtrl.text.trim())),
+      MaterialPageRoute(builder: (_) => const EmailOtpPage()),
     );
   }
 

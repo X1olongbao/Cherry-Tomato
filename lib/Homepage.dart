@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'create_new_task.dart';
+import 'pomodoro_timer.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -251,7 +252,12 @@ class _HomepageState extends State<Homepage> {
           backgroundColor: Colors.white,
           elevation: 3,
           shape: const CircleBorder(),
-          onPressed: () {},
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PomodoroTimerPage()),
+            );
+          },
           child: Image.asset("assets/Homepage/pomodoro timer icon.png", fit: BoxFit.contain),
         ),
       ),
