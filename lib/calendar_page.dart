@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:tomatonator/homepage.dart'; // to use Task model
 
 class CalendarPage extends StatefulWidget {
-  final List<Task> tasks;
+  // Using dynamic to avoid circular import with Homepage Task model.
+  final List tasks;
 
-  const CalendarPage({super.key, required this.tasks});
+  const CalendarPage({super.key, this.tasks = const []});
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -13,13 +13,11 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   DateTime _selectedDate = DateTime.now();
   late PageController _pageController;
-  int _currentWeekIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: 1000);
-    _currentWeekIndex = 1000;
+  _pageController = PageController(initialPage: 1000);
   }
 
   @override
@@ -28,7 +26,7 @@ class _CalendarPageState extends State<CalendarPage> {
     super.dispose();
   }
 
-  List<Task> get _tasksForDay {
+  List get _tasksForDay {
     final selectedDay =
         "${_monthName(_selectedDate.month)} ${_selectedDate.day}, ${_selectedDate.year}";
     return widget.tasks.where((t) => t.date == selectedDay).toList();
@@ -95,7 +93,7 @@ class _CalendarPageState extends State<CalendarPage> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
-  Widget _buildTaskCard(Task task) {
+  Widget _buildTaskCard(dynamic task) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -208,7 +206,6 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Widget _buildWeek(DateTime weekStart) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: List.generate(7, (i) {
         final day = weekStart.add(Duration(days: i));
         final isSelected = day.day == _selectedDate.day &&
@@ -217,54 +214,49 @@ class _CalendarPageState extends State<CalendarPage> {
         final hasTask = widget.tasks.any((t) =>
             t.date == "${_monthName(day.month)} ${day.day}, ${day.year}");
 
-        return GestureDetector(
-          onTap: () => setState(() => _selectedDate = day),
-          child: Container(
-            width: 45,
-            height: 85,
-            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.red : Colors.red[100],
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  [
-                    "Mon",
-                    "Tue",
-                    "Wed",
-                    "Thu",
-                    "Fri",
-                    "Sat",
-                    "Sun"
-                  ][day.weekday - 1],
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.black,
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "${day.day}",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isSelected ? Colors.white : Colors.black,
-                  ),
-                ),
-                if (hasTask)
-                  Container(
-                    margin: const EdgeInsets.only(top: 6),
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : Colors.red,
-                      shape: BoxShape.circle,
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _selectedDate = day),
+            child: Container(
+              height: 78,
+              margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.red : Colors.red[100],
+                borderRadius: BorderRadius.circular(26),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][day.weekday - 1],
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
                     ),
                   ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    "${day.day}",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : Colors.black,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (hasTask)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: isSelected ? Colors.white : Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         );
@@ -295,8 +287,9 @@ class _CalendarPageState extends State<CalendarPage> {
 
         // Rounded container for calendar + swipable weeks
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          // Align with the task panel below (no side margin, internal padding only)
+          margin: EdgeInsets.zero,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -306,14 +299,13 @@ class _CalendarPageState extends State<CalendarPage> {
             ],
           ),
           child: SizedBox(
-            height: 100,
+            height: 92,
             child: PageView.builder(
               controller: _pageController,
               onPageChanged: (index) {
                 final base =
                     DateTime.now().add(Duration(days: (index - 1000) * 7));
                 setState(() {
-                  _currentWeekIndex = index;
                   _selectedDate = base;
                 });
               },
