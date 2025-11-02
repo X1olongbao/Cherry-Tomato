@@ -62,7 +62,8 @@ class Onboarding2Page extends StatelessWidget {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const GetStartedPage()),
+                            MaterialPageRoute(
+                                builder: (context) => const GetStartedPage()),
                           );
                         },
                         child: const Text(
@@ -121,7 +122,8 @@ class Onboarding2Page extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const Onboarding3Page()),
+                    MaterialPageRoute(
+                        builder: (context) => const Onboarding3Page()),
                   );
                 },
                 child: Image.asset(

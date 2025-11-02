@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'create_new_task.dart';
 import 'calendar_page.dart';
-import 'pomodoro_timer.dart'; 
+import 'pomodoro_timer.dart';
+import 'statistic_page.dart';
+import 'profile.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -60,15 +62,16 @@ class _HomepageState extends State<Homepage> {
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
+  // ✅ Proper pages list (ProfilePage now used directly)
+  List<Widget> get _pages => [
+        _buildHomeContent(), // 0 → Home
+        CalendarPage(tasks: _tasks), // 1 → Calendar
+        StatisticPage(tasks: _tasks), // 2 → Statistics Page with task data
+        const ProfilePage(), // 3 → Profile
+      ];
+
   @override
   Widget build(BuildContext context) {
-    final List<Widget> _pages = [
-      _buildHomeContent(),
-      CalendarPage(tasks: _tasks),
-      const Center(child: Text("Stats Page", style: TextStyle(fontSize: 20))),
-      const Center(child: Text("Profile Page", style: TextStyle(fontSize: 20))),
-    ];
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(child: _pages[_selectedIndex]),
@@ -84,7 +87,7 @@ class _HomepageState extends State<Homepage> {
               _buildNavItem("assets/Homepage/Home icon.png", 0),
               _buildNavItem("assets/Homepage/calendar icon.png", 1),
               const SizedBox(width: 40),
-              _buildNavItem("assets/Homepage/stats icon.png", 2),
+              _buildNavItem("assets/Homepage/stats icon.png", 2), // ✅ Stats
               _buildNavItem("assets/Homepage/profile icon.png", 3),
             ],
           ),
@@ -100,11 +103,15 @@ class _HomepageState extends State<Homepage> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const PomodoroTimerPage()),
+              MaterialPageRoute(
+                builder: (context) => const PomodoroTimerPage(),
+              ),
             );
           },
-          child: Image.asset("assets/Homepage/pomodoro timer icon.png",
-              fit: BoxFit.contain),
+          child: Image.asset(
+            "assets/Homepage/pomodoro timer icon.png",
+            fit: BoxFit.contain,
+          ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -148,8 +155,7 @@ class _HomepageState extends State<Homepage> {
                       offset: Offset(0, 2))
                 ],
               ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Row(
                 children: [
                   Image.asset('assets/Homepage/goal.png', width: 56),
@@ -179,7 +185,8 @@ class _HomepageState extends State<Homepage> {
                   final newTask = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (context) => const CreateNewTaskPage()),
+                      builder: (context) => const CreateNewTaskPage(),
+                    ),
                   );
                   if (newTask != null && newTask is Task) {
                     setState(() => _tasks.add(newTask));
@@ -273,24 +280,14 @@ class _HomepageState extends State<Homepage> {
                                               ? Icons.warning_amber_rounded
                                               : task.priority == "Medium"
                                                   ? Icons.bolt
-                                                  : Icons.arrow_downward_rounded,
+                                                  : Icons
+                                                      .arrow_downward_rounded,
                                           color: task.priority == "High"
                                               ? Colors.red
                                               : task.priority == "Medium"
                                                   ? Colors.orange
                                                   : Colors.blue,
                                           size: 16,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          task.priority,
-                                          style: TextStyle(
-                                            color: task.priority == "High"
-                                                ? Colors.red
-                                                : task.priority == "Medium"
-                                                    ? Colors.orange
-                                                    : Colors.blue,
-                                          ),
                                         ),
                                         if (task.totalSubtasks > 0) ...[
                                           const SizedBox(width: 12),
@@ -304,8 +301,19 @@ class _HomepageState extends State<Homepage> {
                                   ],
                                 ),
                               ),
-                              const Icon(Icons.play_arrow,
-                                  color: Colors.red, size: 28),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          PomodoroTimerPage(task: task),
+                                    ),
+                                  );
+                                },
+                                child: const Icon(Icons.play_arrow,
+                                    color: Colors.red, size: 28),
+                              ),
                             ],
                           ),
                         ),
@@ -323,8 +331,10 @@ class _HomepageState extends State<Homepage> {
 
   Widget _buildNavItem(String asset, int index) => GestureDetector(
         onTap: () => _onItemTapped(index),
-        child: Image.asset(asset,
-            width: 28,
-            color: _selectedIndex == index ? tomatoRed : Colors.black54),
+        child: Image.asset(
+          asset,
+          width: 28,
+          color: _selectedIndex == index ? tomatoRed : Colors.black54,
+        ),
       );
 }

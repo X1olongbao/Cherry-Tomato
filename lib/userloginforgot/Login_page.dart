@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:tomatonator/homepage.dart';
+import 'package:tomatonator/homepage/Homepage.dart';
 import 'sign_up_page.dart';
 import 'forgot_pass_page.dart';
 
@@ -113,7 +113,7 @@ class _LoginPageState extends State<LoginPage> {
                   },
                 ),
               ]),
-              const SizedBox(height: 80),
+              const SizedBox(height: 40),
               const Padding(
                   padding: EdgeInsets.only(left: 8.0, bottom: 6),
                   child: Text('Email',

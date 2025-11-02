@@ -58,7 +58,8 @@ class LandingPage extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const Onboarding1Page()),
+                    MaterialPageRoute(
+                        builder: (context) => const Onboarding1Page()),
                   );
                 },
                 child: Image.asset(

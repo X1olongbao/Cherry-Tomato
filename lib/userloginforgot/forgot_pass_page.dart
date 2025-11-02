@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'email_otp_page.dart';
 
-
-
 const Color tomatoRed = Color(0xFFE53935);
 
 class ForgotPasswordPage extends StatefulWidget {
@@ -46,7 +44,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   InputDecoration get _decoration => InputDecoration(
         hintText: 'Enter your email',
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         filled: true,
         fillColor: Colors.white,
         enabledBorder: OutlineInputBorder(
@@ -59,7 +58,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-            borderSide: const BorderSide(color: Colors.red, width: 1),
+          borderSide: const BorderSide(color: Colors.red, width: 1),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
@@ -107,7 +106,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     onTap: () => Navigator.pop(context),
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
-                      child: Image.asset('assets/Forgot pass/Vector.png', fit: BoxFit.contain),
+                      child: Image.asset('assets/Forgot pass/Vector.png',
+                          fit: BoxFit.contain),
                     ),
                   ),
                 ),
@@ -128,7 +128,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 const SizedBox(height: 32),
                 const Padding(
                   padding: EdgeInsets.only(left: 4.0, bottom: 6),
-                  child: Text('Email', style: TextStyle(fontSize: 14, color: Colors.black)),
+                  child: Text('Email',
+                      style: TextStyle(fontSize: 14, color: Colors.black)),
                 ),
                 TextField(
                   controller: _emailCtrl,
@@ -142,7 +143,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   child: ElevatedButton(
                     onPressed: _validEmail ? _goNext : null,
                     style: _btnStyle,
-                    child: const Text('Next', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: const Text('Next',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(height: 8),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'landing_page.dart';
+import 'landingpage/landing_page.dart';
 
 class CherryTomatoApp extends StatelessWidget {
   const CherryTomatoApp({super.key});

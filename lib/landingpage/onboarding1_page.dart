@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'onboarding2_page.dart';
 import 'get_started_page.dart';
 
-class Onboarding3Page extends StatelessWidget {
-  const Onboarding3Page({super.key});
+class Onboarding1Page extends StatelessWidget {
+  const Onboarding1Page({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -14,6 +15,7 @@ class Onboarding3Page extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            // Centered Progress indicator, Skip on right using Stack
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
               child: SizedBox(
@@ -21,29 +23,12 @@ class Onboarding3Page extends StatelessWidget {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
+                    // Centered progress indicator
                     Align(
                       alignment: Alignment.center,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
                           Container(
                             width: 24,
                             height: 8,
@@ -52,17 +37,36 @@ class Onboarding3Page extends StatelessWidget {
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
                         ],
                       ),
                     ),
+                    // Skip button on the right
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () {
-                          // Navigate to the next page
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const GetStartedPage()),
+                            MaterialPageRoute(
+                                builder: (context) => const GetStartedPage()),
                           );
                         },
                         child: const Text(
@@ -82,13 +86,13 @@ class Onboarding3Page extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Image.asset(
-                  'assets/onboarding 3/Group 10.png',
+                  'assets/onboarding 1/Group 92.png',
                   width: size.width * 0.7,
                   height: size.width * 0.7,
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Track Your Progress',
+                  'Stay Organized',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -99,7 +103,7 @@ class Onboarding3Page extends StatelessWidget {
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 32),
                   child: Text(
-                    'See your progress with visual reports and insightful productivity tracking',
+                    'Plan and prioritize with To-Do lists and due dates',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 18,
@@ -121,11 +125,12 @@ class Onboarding3Page extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const GetStartedPage()),
+                    MaterialPageRoute(
+                        builder: (context) => const Onboarding2Page()),
                   );
                 },
                 child: Image.asset(
-                  'assets/onboarding 3/arrow button ob3.png',
+                  'assets/onboarding 1/arrow button ob1.png',
                   width: 32,
                   height: 32,
                 ),

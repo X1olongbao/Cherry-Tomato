@@ -23,7 +23,7 @@ class _SignUpPageState extends State<SignUpPage> {
     _passwordCtrl.addListener(_onChanged);
   }
 
-  void _onChanged() => setState(() {}); 
+  void _onChanged() => setState(() {});
 
   bool get _allFilled =>
       _usernameCtrl.text.isNotEmpty &&
@@ -131,7 +131,7 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 80),
+              const SizedBox(height: 40),
 
               // Username
               const Padding(
@@ -199,7 +199,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 15),
 
               // OR divider
               const Row(
@@ -226,7 +226,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ],
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 15),
 
               // Google button (placeholder asset)
               SizedBox(
