@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:tomatonator/homepage/Homepage.dart';
+import 'package:tomatonator/services/auth_service.dart';
+import 'package:tomatonator/homepage/homepage_app.dart';
 import 'sign_up_page.dart';
 import 'forgot_pass_page.dart';
 
@@ -15,6 +16,8 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  bool _loading = false; // track ongoing login
+  String? _error; // last error message
 
   @override
   void initState() {
@@ -48,6 +51,40 @@ class _LoginPageState extends State<LoginPage> {
           return tomatoRed;
         }),
       );
+
+  // Perform Supabase email/password login and navigate to Homepage on success.
+  Future<void> _handleLogin() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await AuthService.instance.signIn(
+        email: _emailCtrl.text.trim(),
+        password: _passwordCtrl.text,
+      );
+      if (!mounted) return;
+      // Navigate to Homepage and clear previous auth screens from stack
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Homepage()),
+        (route) => false,
+      );
+    } on AuthFailure catch (e) {
+      setState(() => _error = e.message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      setState(() => _error = e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Login failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   InputDecoration _fieldDecoration(String hint) => InputDecoration(
         hintText: hint,
@@ -147,16 +184,20 @@ class _LoginPageState extends State<LoginPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _allFilled
-                      ? () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const Homepage()))
-                      : null,
+                  onPressed: _allFilled && !_loading ? _handleLogin : null,
                   style: _continueStyle,
-                  child: const Text('Continue',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: _loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Continue',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
               ),
               const SizedBox(height: 32),
@@ -190,6 +231,21 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               ),
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: tomatoRed),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: tomatoRed),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 const Text('Don\'t have an account? ',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'landingpage/landing_page.dart';
+import 'utilities/init.dart';
 
 class CherryTomatoApp extends StatelessWidget {
   const CherryTomatoApp({super.key});
@@ -19,4 +20,9 @@ class CherryTomatoApp extends StatelessWidget {
   }
 }
 
-void main() => runApp(const CherryTomatoApp());
+// Ensure backend (Supabase, SQLite, Sync) is initialized before the app starts
+// so that authentication and session storage are ready for UI interactions.
+Future<void> main() async {
+  await initializeBackend();
+  runApp(const CherryTomatoApp());
+}

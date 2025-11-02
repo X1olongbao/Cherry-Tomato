@@ -8,7 +8,8 @@ plugins {
 android {
     namespace = "com.example.tomatonator"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Force a newer Android NDK to satisfy plugins requiring 27.x
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

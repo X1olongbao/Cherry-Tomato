@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'homepage_app.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
 class StatisticPage extends StatelessWidget {
-  final List<dynamic> tasks;
+  final List<Task> tasks;
   const StatisticPage({super.key, required this.tasks});
 
   @override
   Widget build(BuildContext context) {
     final int totalTasks = tasks.length;
     final int completedTasks =
-        tasks.where((t) => (t is dynamic) ? (t.isDone == true) : false).length;
+        tasks.where((t) => t.isDone == true).length;
 
     final weeklyData = {
       "Sun": 14,

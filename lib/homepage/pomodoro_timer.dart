@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'Homepage.dart'; // Add this import for Task
+import 'homepage_app.dart'; // Task type
+import 'package:tomatonator/services/session_service.dart';
+import 'package:tomatonator/utilities/logger.dart';
 
 /// Pomodoro / Short Break / Long Break single-page UI (UI-only logic)
 /// Uses an in-memory timer (no persistence) and draws a circular progress
@@ -89,9 +91,30 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     _onComplete(forceSkip: true);
   }
 
+  /// Called when the current session completes or is skipped.
+  /// Records completed Pomodoro sessions locally and triggers sync.
   void _onComplete({bool forceSkip = false}) {
     if (_current == SessionType.pomodoro && !forceSkip) {
       _completedPomodoros++;
+      // Save a completed Pomodoro session using the backend services.
+      try {
+        final durationMinutes = _durations[SessionType.pomodoro]!.inMinutes;
+        // Record session (includes user_id if logged in) and attempt sync.
+        SessionService.instance.recordCompletedSession(durationMinutes);
+        // Optional user feedback
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Pomodoro completed and saved')), 
+          );
+        }
+      } catch (e) {
+        Logger.e('Failed to record session: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to save session: $e')),
+          );
+        }
+      }
       if (_completedPomodoros % 4 == 0) {
         _current = SessionType.longBreak;
       } else {

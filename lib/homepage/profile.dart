@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:tomatonator/services/auth_service.dart';
+import 'package:tomatonator/userloginforgot/login_page.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -75,21 +77,30 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
 
               const SizedBox(height: 12),
-              const Text(
-                "Cherry",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              const Text(
-                "cherrypomo@email.com",
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.black54,
-                ),
-              ),
+              Builder(builder: (context) {
+                final user = AuthService.instance.currentUser;
+                final displayName = 'Cherry'; // fallback
+                final displayEmail = user?.email ?? 'Not logged in';
+                return Column(
+                  children: [
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                    Text(
+                      displayEmail,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                );
+              }),
 
               const SizedBox(height: 36),
 
@@ -142,7 +153,24 @@ class _ProfilePageState extends State<ProfilePage> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () async {
+                    // Capture Navigator and Messenger before the async gap
+                    final navigator = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
+                    try {
+                      await AuthService.instance.signOut();
+                      if (!mounted) return;
+                      navigator.pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                        (route) => false,
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Logout failed: $e')),
+                      );
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: tomatoRed,
                     shape: RoundedRectangleBorder(

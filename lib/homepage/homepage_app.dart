@@ -4,6 +4,8 @@ import 'calendar_page.dart';
 import 'pomodoro_timer.dart';
 import 'statistic_page.dart';
 import 'profile.dart';
+import 'session_history_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -135,11 +137,21 @@ class _HomepageState extends State<Homepage> {
             ],
           ),
           const SizedBox(height: 12),
-          const Text('Hi there, User',
-              style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black)),
+          Builder(builder: (context) {
+            final user = Supabase.instance.client.auth.currentUser;
+            final meta = user?.userMetadata;
+            final username = (meta is Map<String, dynamic>)
+                ? meta['username'] as String?
+                : null;
+            final name = (username != null && username.isNotEmpty)
+                ? username
+                : 'Cherry'; // fallback without using email
+            return Text('Hi there, $name',
+                style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black));
+          }),
           const SizedBox(height: 24),
           Center(
             child: Container(
@@ -180,24 +192,42 @@ class _HomepageState extends State<Homepage> {
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.black)),
-              TextButton(
-                onPressed: () async {
-                  final newTask = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateNewTaskPage(),
-                    ),
-                  );
-                  if (newTask != null && newTask is Task) {
-                    setState(() => _tasks.add(newTask));
-                  }
-                },
-                child: const Text('Add Task',
-                    style: TextStyle(
-                        color: tomatoRed,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
-              ),
+              Row(children: [
+                TextButton(
+                  onPressed: () async {
+                    final newTask = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CreateNewTaskPage(),
+                      ),
+                    );
+                    if (newTask != null && newTask is Task) {
+                      setState(() => _tasks.add(newTask));
+                    }
+                  },
+                  child: const Text('Add Task',
+                      style: TextStyle(
+                          color: tomatoRed,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SessionHistoryPage(),
+                      ),
+                    );
+                  },
+                  child: const Text('View History',
+                      style: TextStyle(
+                          color: tomatoRed,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
+                ),
+              ]),
             ],
           ),
           const SizedBox(height: 12),
