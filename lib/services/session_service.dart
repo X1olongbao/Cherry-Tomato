@@ -37,7 +37,8 @@ class SessionService {
   /// Merge local and remote sessions for the current user.
   /// - Local includes unsynced and synced entries
   /// - Remote includes server synced entries
-  /// De-duplicates by `id` and sorts by `completedAt` desc.
+  /// De-duplicates by `(duration, completedAt)` signature to avoid showing
+  /// duplicates when local UUIDs differ from remote BIGSERIAL ids.
   Future<List<PomodoroSession>> mergedSessionsForCurrentUser() async {
     final user = AuthService.instance.currentUser;
     final local = await DatabaseService.instance.getSessions(userId: user?.id);
@@ -49,14 +50,24 @@ class SessionService {
       // If remote fetch fails (offline, server), still show local sessions.
       remote = [];
     }
-    final map = <String, PomodoroSession>{};
+    final bySignature = <String, PomodoroSession>{};
     for (final s in local) {
-      map[s.id] = s;
+      final sig = '${s.duration}|${s.completedAt}';
+      bySignature[sig] = s;
     }
     for (final s in remote) {
-      map.putIfAbsent(s.id, () => s);
+      final sig = '${s.duration}|${s.completedAt}';
+      final existing = bySignature[sig];
+      if (existing == null) {
+        bySignature[sig] = s;
+      } else {
+        // Prefer remote for already-synced entries; keep local if it's unsynced
+        if (existing.synced) {
+          bySignature[sig] = s;
+        }
+      }
     }
-    final all = map.values.toList();
+    final all = bySignature.values.toList();
     all.sort((a, b) => b.completedAt.compareTo(a.completedAt));
     return all;
   }

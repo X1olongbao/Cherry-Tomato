@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'login_page.dart';
-import 'package:tomatonator/services/auth_service.dart';
+import 'email_otp_verification_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:math';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -34,7 +35,7 @@ class _SignUpPageState extends State<SignUpPage> {
       _emailCtrl.text.isNotEmpty &&
       _passwordCtrl.text.isNotEmpty;
 
-  // Perform Supabase email/password signup, save username metadata, then go to Login.
+  // Generate OTP, send via Supabase Edge Function, and navigate to OTP verification.
   Future<void> _handleSignup() async {
     if (_loading) return;
     setState(() {
@@ -42,37 +43,49 @@ class _SignUpPageState extends State<SignUpPage> {
       _error = null;
     });
     try {
-      await AuthService.instance.signUp(
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text,
+      final email = _emailCtrl.text.trim();
+      final username = _usernameCtrl.text.trim();
+      final password = _passwordCtrl.text;
+
+      // Generate in-memory OTP and expiry (15 minutes)
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghijkmnopqrstuvwxyz';
+      final rand = Random.secure();
+      final code = List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
+      final expiryIso = DateTime.now().toUtc().add(const Duration(minutes: 15)).toIso8601String();
+
+      // Call Supabase Edge Function to send the OTP email
+      final response = await Supabase.instance.client.functions.invoke(
+        'send_otp_email',
+        body: {
+          'email': email,
+          'passcode': code,
+          'expiry': expiryIso,
+        },
       );
-      // Save the entered username to Supabase auth user metadata
-      try {
-        await Supabase.instance.client.auth.updateUser(
-          UserAttributes(data: {'username': _usernameCtrl.text.trim()}),
-        );
-      } catch (_) {
-        // Ignore metadata update errors; signup succeeded
+
+      final status = response.status ?? 200;
+      if (status < 200 || status >= 300) {
+        throw Exception('Failed to send OTP email. Status: $status');
       }
+
       if (!mounted) return;
-      // Navigate back to Login so user can log in with new credentials
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created. Please log in.')),
+      final ctx = OtpContext(
+        flow: OtpFlow.registration,
+        email: email,
+        username: username,
+        password: password,
+        otp: code,
+        expiryIso: expiryIso,
       );
-      Navigator.pushAndRemoveUntil(
+
+      Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-        (route) => false,
-      );
-    } on AuthFailure catch (e) {
-      setState(() => _error = e.message);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        MaterialPageRoute(builder: (_) => EmailOtpVerificationPage(otpContext: ctx)),
       );
     } catch (e) {
       setState(() => _error = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Signup failed: $e')),
+        SnackBar(content: Text('Navigation failed: $e')),
       );
     } finally {
       if (mounted) setState(() => _loading = false);

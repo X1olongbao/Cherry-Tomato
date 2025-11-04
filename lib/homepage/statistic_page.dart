@@ -9,9 +9,9 @@ class StatisticPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int totalTasks = tasks.length;
-    final int completedTasks =
-        tasks.where((t) => t.isDone == true).length;
+    // Show remaining tasks rather than all created tasks
+    final int pendingTasks = tasks.where((t) => t.isDone != true).length;
+    final int completedTasks = tasks.where((t) => t.isDone == true).length;
 
     final weeklyData = {
       "Sun": 14,
@@ -110,7 +110,7 @@ class StatisticPage extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _buildStatBox(totalTasks.toString(), "TASK", tomatoRed),
+                  _buildStatBox(pendingTasks.toString(), "TASK", tomatoRed),
                   _buildStatBox(
                       completedTasks.toString(), "COMPLETED", Colors.green),
                 ],

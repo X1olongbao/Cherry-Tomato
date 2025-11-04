@@ -79,7 +79,14 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 12),
               Builder(builder: (context) {
                 final user = AuthService.instance.currentUser;
-                final displayName = 'Cherry'; // fallback
+                final username = user?.username;
+                // Fallback to email local-part if username missing
+                final emailLocal = user?.email?.split('@').first;
+                final displayName = (username != null && username.isNotEmpty)
+                    ? username
+                    : (emailLocal != null && emailLocal.isNotEmpty)
+                        ? emailLocal
+                        : 'Cherry';
                 final displayEmail = user?.email ?? 'Not logged in';
                 return Column(
                   children: [

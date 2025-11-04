@@ -28,6 +28,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
 
   Timer? _ticker;
   Duration _remaining = const Duration(minutes: 25);
+  DateTime? _endAt; // target end time for robust countdown
   int _completedPomodoros = 0; // for cycle indicators (0-4)
   bool _isRunning = false;
 
@@ -51,16 +52,22 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       _current = type;
       _remaining = _durations[type]!;
       _stopTimer();
+      _endAt = null;
     });
   }
 
   void _startTimer() {
     if (_isRunning) return;
+    // Set a target end time so ticks are resilient to frame drops/backgrounding
+    _endAt ??= DateTime.now().add(_remaining);
     setState(() => _isRunning = true);
     _ticker = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
       setState(() {
-        _remaining -= const Duration(seconds: 1);
+        // Compute remaining by comparing to target end time
+        final now = DateTime.now();
+        final diff = _endAt!.difference(now);
+        _remaining = diff.isNegative ? Duration.zero : diff;
         if (_remaining <= Duration.zero) {
           _remaining = Duration.zero;
           _stopTimer();
@@ -74,37 +81,47 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     if (!_isRunning) return;
     _ticker?.cancel();
     setState(() => _isRunning = false);
+    // Capture remaining at pause and clear end time
+    _endAt = null;
   }
 
   void _stopTimer() {
     _ticker?.cancel();
     _isRunning = false;
+    _endAt = null;
   }
 
   void _resetTimer() {
     _stopTimer();
     setState(() => _remaining = _total);
+    _endAt = null;
   }
 
   void _skipSession() {
+    // Only allow skip if the timer has started and is running
+    if (!_isRunning) return;
+    // Finish immediately and record as completed, but do NOT advance to next session
+    setState(() => _remaining = Duration.zero);
     _stopTimer();
-    _onComplete(forceSkip: true);
+    _onSkipComplete();
   }
 
   /// Called when the current session completes or is skipped.
-  /// Records completed Pomodoro sessions locally and triggers sync.
+  /// Records completed sessions (Pomodoro, Short Break, Long Break) locally and triggers sync.
   void _onComplete({bool forceSkip = false}) {
-    if (_current == SessionType.pomodoro && !forceSkip) {
-      _completedPomodoros++;
-      // Save a completed Pomodoro session using the backend services.
+    // Record any finished session unless explicitly skipped
+    if (!forceSkip) {
       try {
-        final durationMinutes = _durations[SessionType.pomodoro]!.inMinutes;
-        // Record session (includes user_id if logged in) and attempt sync.
+        final durationMinutes = _durations[_current]!.inMinutes;
         SessionService.instance.recordCompletedSession(durationMinutes);
-        // Optional user feedback
         if (mounted) {
+          final label = switch (_current) {
+            SessionType.pomodoro => 'Pomodoro',
+            SessionType.shortBreak => 'Short break',
+            SessionType.longBreak => 'Long break',
+          };
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Pomodoro completed and saved')), 
+            SnackBar(content: Text('$label completed and saved')),
           );
         }
       } catch (e) {
@@ -115,6 +132,11 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
           );
         }
       }
+    }
+
+    // Advance cycle: after a Pomodoro, go to break; after a break, go to Pomodoro
+    if (_current == SessionType.pomodoro) {
+      _completedPomodoros++;
       if (_completedPomodoros % 4 == 0) {
         _current = SessionType.longBreak;
       } else {
@@ -124,6 +146,38 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       _current = SessionType.pomodoro;
     }
     _remaining = _durations[_current]!;
+    _endAt = null;
+    setState(() {});
+  }
+
+  /// Called when the user skips the current session.
+  /// Saves the session locally like a normal completion, but stays on the same session type.
+  void _onSkipComplete() {
+    try {
+      final durationMinutes = _durations[_current]!.inMinutes;
+      SessionService.instance.recordCompletedSession(durationMinutes);
+      if (mounted) {
+        final label = switch (_current) {
+          SessionType.pomodoro => 'Pomodoro',
+          SessionType.shortBreak => 'Short break',
+          SessionType.longBreak => 'Long break',
+        };
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$label skipped and saved')),
+        );
+      }
+    } catch (e) {
+      Logger.e('Failed to record skipped session: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save session: $e')),
+        );
+      }
+    }
+
+    // Do NOT advance; reset same session
+    _remaining = _durations[_current]!;
+    _endAt = null;
     setState(() {});
   }
 
@@ -398,7 +452,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         ),
         const SizedBox(width: 30),
         _circleButton(
-            icon: Icons.skip_next, onTap: _skipSession, enabled: true),
+            icon: Icons.skip_next, onTap: _skipSession, enabled: _isRunning),
       ],
     );
   }

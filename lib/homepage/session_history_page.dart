@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tomatonator/services/session_service.dart';
+import 'package:tomatonator/services/sync_service.dart';
 import 'package:tomatonator/models/pomodoro_session.dart';
 
 /// Session History: Shows local and remote Pomodoro sessions merged,
@@ -39,8 +40,19 @@ class _SessionHistoryPageState extends State<SessionHistoryPage> {
   }
 
   String _formatTime(int ms) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
-    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    // Display time in UTC+08:00 regardless of device timezone
+    final dtUtc = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+    final dtPlus8 = dtUtc.add(const Duration(hours: 8));
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${dtPlus8.year}-${two(dtPlus8.month)}-${two(dtPlus8.day)} ${two(dtPlus8.hour)}:${two(dtPlus8.minute)}';
+  }
+
+
+  /// Handle manual sync and refresh the session list
+  Future<void> _handleManualSync() async {
+    await SyncService.instance.manualSync(context);
+    // Refresh the session list after sync
+    await _load();
   }
 
   @override
@@ -50,6 +62,14 @@ class _SessionHistoryPageState extends State<SessionHistoryPage> {
       appBar: AppBar(
         title: const Text('Session History'),
         backgroundColor: Colors.white,
+        actions: [
+          // Always show Sync Now; when not logged in, a helpful snackbar is shown.
+          IconButton(
+            onPressed: _handleManualSync,
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sync Now',
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _load,

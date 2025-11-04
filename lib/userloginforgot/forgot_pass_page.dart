@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'email_otp_page.dart';
+import 'email_otp_verification_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:math';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -35,10 +37,57 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   void _goNext() {
     setState(() => _showErrors = true);
     if (!_validEmail) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const EmailOtpPage()),
-    );
+    _startEmailCodeFlow();
+  }
+
+  Future<void> _startEmailCodeFlow() async {
+    final email = _emailCtrl.text.trim();
+    try {
+      // Generate in-memory OTP and expiry
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghijkmnopqrstuvwxyz';
+      final rand = Random.secure();
+      final code = List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
+      final expiryIso = DateTime.now().toUtc().add(const Duration(minutes: 15)).toIso8601String();
+
+      // Send via Supabase Edge Function
+      final response = await Supabase.instance.client.functions.invoke(
+        'send_otp_email',
+        body: {
+          'email': email,
+          'passcode': code,
+          'expiry': expiryIso,
+        },
+      );
+
+      final status = response.status ?? 200;
+      if (status < 200 || status >= 300) {
+        throw Exception('Failed to send OTP email. Status: $status');
+      }
+
+      if (!mounted) return;
+      final ctx = OtpContext(
+        flow: OtpFlow.forgotPassword,
+        email: email,
+        username: null,
+        password: null,
+        otp: code,
+        expiryIso: expiryIso,
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => EmailOtpVerificationPage(otpContext: ctx)),
+      );
+    } catch (e) {
+      final err = e.toString();
+      final notFound = err.contains('404') || err.toLowerCase().contains('not found');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            notFound ? 'No account found' : 'Failed to start OTP flow: $err',
+          ),
+        ),
+      );
+    }
   }
 
   InputDecoration get _decoration => InputDecoration(

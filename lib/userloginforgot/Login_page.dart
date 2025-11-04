@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/homepage/homepage_app.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:math';
 import 'sign_up_page.dart';
 import 'forgot_pass_page.dart';
 
@@ -81,6 +85,118 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Login failed: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Google Sign-In via Firebase, then go to Homepage on success.
+  Future<void> _googleLogin() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      final GoogleSignInAccount? gUser = await GoogleSignIn().signIn();
+      if (gUser == null) {
+        setState(() => _loading = false);
+        return; // aborted
+      }
+      final gAuth = await gUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: gAuth.accessToken,
+        idToken: gAuth.idToken,
+      );
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      // Ensure a Supabase session exists using Google id token if supported; otherwise, provision and sign in.
+      try {
+        if (gAuth.idToken != null) {
+          await Supabase.instance.client.auth.signInWithIdToken(
+            provider: Provider.google,
+            idToken: gAuth.idToken!,
+            accessToken: gAuth.accessToken,
+          );
+        }
+      } catch (_) {
+        // Ignore and continue to fallback
+      }
+
+      // If Supabase still has no current user, fallback to synthetic email/password.
+      if (Supabase.instance.client.auth.currentUser == null) {
+        final email = FirebaseAuth.instance.currentUser?.email ?? gUser.email;
+        if (email.isEmpty) {
+          throw Exception('Google account has no email; cannot create Supabase session');
+        }
+
+        final syntheticPassword = 'google-oauth-${gUser.id}-${email.hashCode}';
+        // Try sign up, tolerate duplicate email
+        try {
+          await AuthService.instance.signUp(
+            email: email,
+            password: syntheticPassword,
+            username: 'User',
+          );
+        } catch (_) {
+          // If already registered or other non-fatal signup error, proceed to sign in
+        }
+        // Ensure we sign in to create an active Supabase session
+        try {
+          await AuthService.instance.signIn(
+            email: email,
+            password: syntheticPassword,
+          );
+        } catch (e) {
+          // Unable to establish Supabase session (likely email confirmation required)
+          throw Exception('Supabase login failed after Google sign-in: $e');
+        }
+      }
+
+      // Create profile for new Google users if missing.
+      try {
+        final supaUser = Supabase.instance.client.auth.currentUser;
+        if (supaUser != null) {
+          final existing = await Supabase.instance.client
+              .from('profiles')
+              .select('id')
+              .eq('id', supaUser.id)
+              .maybeSingle();
+          if (existing == null) {
+            final rng = Random();
+            final username = 'User${rng.nextInt(900000) + 100000}';
+            await Supabase.instance.client.from('profiles').upsert({
+              'id': supaUser.id,
+              'username': username,
+              'email': FirebaseAuth.instance.currentUser?.email ?? gUser.email,
+              'phone_number': null,
+              'provider': 'google',
+              'is_verified': true,
+              'last_login': DateTime.now().toUtc().toIso8601String(),
+            });
+          }
+        }
+      } catch (_) {
+        // Non-fatal
+      }
+
+      // Navigate only if Supabase session exists
+      if (Supabase.instance.client.auth.currentUser == null) {
+        throw Exception('Logged into Google (Firebase) but not into Supabase');
+      }
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const Homepage()),
+      );
+    } catch (e) {
+      setState(() => _error = 'Google sign-in failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Google sign-in succeeded, but app login failed. Please ensure Supabase Google provider is enabled or try again.'
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -215,7 +331,7 @@ class _LoginPageState extends State<LoginPage> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: _googleLogin,
                   icon: Image.asset('assets/login page/devicon_google.png',
                       width: 24, height: 24),
                   label: const Text('Continue with Google',

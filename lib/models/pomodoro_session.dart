@@ -54,11 +54,17 @@ class PomodoroSession {
 
   /// Map used for Supabase insert. Do not include `synced`.
   Map<String, dynamic> toRemoteMap() {
+    // Format completed_at as UTC+08:00 ISO-8601 string
+    final dtUtc = DateTime.fromMillisecondsSinceEpoch(completedAt, isUtc: true);
+    final dtPlus8 = dtUtc.add(const Duration(hours: 8));
+    String two(int v) => v.toString().padLeft(2, '0');
+    final isoLocal = '${dtPlus8.year}-${two(dtPlus8.month)}-${two(dtPlus8.day)}T'
+        '${two(dtPlus8.hour)}:${two(dtPlus8.minute)}:${two(dtPlus8.second)}';
     return {
       'id': id,
       'user_id': userId,
       'duration': duration,
-      'completed_at': completedAt,
+      'completed_at': '${isoLocal}+08:00',
     };
   }
 

@@ -17,7 +17,14 @@ dependencies:
   uuid: ^4.4.0
   path: ^1.9.0
 
+  # Firebase for OTP and Google Sign-In
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  google_sign_in: ^6.2.1
+
   
+  # HTTP client for calling secure backend endpoints (Edge Functions)
+  http: ^1.2.0
 
 
   cupertino_icons: ^1.0.2

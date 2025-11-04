@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
@@ -12,13 +13,26 @@ import 'logger.dart';
 Future<void> initializeBackend() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize Firebase (for OTP and Google Sign-In)
+  try {
+    await Firebase.initializeApp();
+    Logger.i('✅ Firebase initialized');
+  } catch (e) {
+    Logger.e('❌ Firebase init failed: $e');
+  }
+
   // Initialize Supabase client
-  await Supabase.initialize(
-    url: Constants.supabaseUrl,
-    anonKey: Constants.supabaseAnonKey,
-    authFlowType: AuthFlowType.pkce,
-  );
-  Logger.i('Supabase initialized');
+  try {
+    await Supabase.initialize(
+      url: Constants.supabaseUrl,
+      anonKey: Constants.supabaseAnonKey,
+      authFlowType: AuthFlowType.pkce,
+    );
+    Logger.i('✅ Supabase initialized');
+  } catch (e) {
+    // Gracefully handle initialization errors (invalid key, network issues)
+    Logger.e('❌ Supabase client init failed: $e');
+  }
 
   // Initialize local database
   await DatabaseService.instance.init();

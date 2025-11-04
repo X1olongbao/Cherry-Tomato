@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'pass_success.dart' as success_page;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utilities/logger.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
 class SetNewPasswordPage extends StatefulWidget {
-  const SetNewPasswordPage({super.key});
+  const SetNewPasswordPage({super.key, required this.userId, required this.email});
+
+  final String userId;
+  final String email;
 
   @override
   State<SetNewPasswordPage> createState() => _SetNewPasswordPageState();
@@ -35,14 +40,29 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
   bool get _match => _pass1.text == _pass2.text && _pass2.text.isNotEmpty;
   bool get _formValid => _validLength && _match;
 
-  void _submit() {
+  Future<void> _submit() async {
     setState(() => _submitted = true);
     if (!_formValid) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-          builder: (context) => const success_page.PasswordResetSuccessPage()),
-    );
+    try {
+      final client = Supabase.instance.client;
+      // Requires an active session for the target user.
+      await client.auth.updateUser(UserAttributes(password: _pass1.text));
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) => const success_page.PasswordResetSuccessPage()),
+      );
+    } catch (e) {
+      Logger.e('Password update failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to update password: ${e.toString().contains('401') ? 'Please sign in first.' : e}',
+          ),
+        ),
+      );
+    }
   }
 
   InputDecoration _decoration(

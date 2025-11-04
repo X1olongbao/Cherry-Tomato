@@ -6,4 +6,19 @@ class Constants {
 
   // Supabase table for sessions
   static const String remoteTable = 'pomodoro_sessions';
+
+  // Backend endpoints for Supabase Admin actions (Edge Functions or secure backend)
+  // Set these to your deployed function URLs.
+  static const String adminCreateUserUrl =
+      'https://mkbjyfyrhubufuqfkooz.functions.supabase.co/create_user';
+  static const String adminUpdatePasswordUrl =
+      'https://mkbjyfyrhubufuqfkooz.functions.supabase.co/update_password';
+  static const String adminUpsertProfileUrl =
+      'https://mkbjyfyrhubufuqfkooz.functions.supabase.co/upsert_profile';
+
+  // EmailJS configuration (public client-side values)
+  // These are used to send verification codes directly from Flutter.
+  static const String emailJsServiceId = 'service_oe4q4yn';
+  static const String emailJsTemplateId = 'template_x9rq88m';
+  static const String emailJsPublicKey = 'PqRWC7QjlXrrkQx54';
 }

@@ -12,16 +12,35 @@ class AuthService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
+  String? _usernameFrom(User user) {
+    final meta = user.userMetadata;
+    if (meta is Map<String, dynamic>) {
+      final u = meta['username'];
+      if (u is String && u.trim().isNotEmpty) return u.trim();
+    }
+    return null;
+  }
+
   /// Sign up a new user using email/password.
+  /// Optionally attaches a `username` to Supabase auth user metadata at creation time.
   /// Throws [AuthFailure] on known errors, e.g. duplicate email.
-  Future<AppUser> signUp({required String email, required String password}) async {
+  Future<AppUser> signUp({required String email, required String password, String? username}) async {
     try {
-      final res = await _client.auth.signUp(email: email, password: password);
+      final meta = (username != null && username.trim().isNotEmpty)
+          ? {'username': username.trim()}
+          : null;
+      final res = await _client.auth.signUp(
+        email: email,
+        password: password,
+        data: meta,
+      );
       final user = res.user;
       if (user == null) {
         throw const AuthFailure(code: AuthFailureCode.unknown, message: 'Signup failed: no user returned');
       }
-      return AppUser(id: user.id, email: user.email);
+      // Prefer reading username from server response; fallback to provided username
+      final resolvedUsername = _usernameFrom(user) ?? username?.trim();
+      return AppUser(id: user.id, email: user.email, username: resolvedUsername);
     } on AuthException catch (e) {
       // Map common Supabase auth errors
       final message = e.message.toLowerCase();
@@ -45,7 +64,7 @@ class AuthService {
       if (user == null) {
         throw const AuthFailure(code: AuthFailureCode.unknown, message: 'Login failed: no user returned');
       }
-      return AppUser(id: user.id, email: user.email);
+      return AppUser(id: user.id, email: user.email, username: _usernameFrom(user));
     } on AuthException catch (e) {
       final message = e.message.toLowerCase();
       if (message.contains('invalid login')) {
@@ -74,7 +93,7 @@ class AuthService {
   AppUser? get currentUser {
     final user = _client.auth.currentUser;
     if (user == null) return null;
-    return AppUser(id: user.id, email: user.email);
+    return AppUser(id: user.id, email: user.email, username: _usernameFrom(user));
   }
 
   /// Listen to auth state changes.
@@ -82,7 +101,7 @@ class AuthService {
     return _client.auth.onAuthStateChange.map((event) {
       final user = _client.auth.currentUser;
       if (user == null) return null;
-      return AppUser(id: user.id, email: user.email);
+      return AppUser(id: user.id, email: user.email, username: _usernameFrom(user));
     });
   }
 }
