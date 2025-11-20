@@ -1,3 +1,4 @@
+// ignore_for_file: file_names
 import 'package:flutter/material.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/homepage/homepage_app.dart';
@@ -77,11 +78,13 @@ class _LoginPageState extends State<LoginPage> {
       );
     } on AuthFailure catch (e) {
       setState(() => _error = e.message);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
     } catch (e) {
       setState(() => _error = e.toString());
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Login failed: $e')),
       );
@@ -95,11 +98,15 @@ class _LoginPageState extends State<LoginPage> {
     if (_loading) return;
     setState(() => _loading = true);
     try {
-      final GoogleSignInAccount? gUser = await GoogleSignIn().signIn();
+      // Force account picker by clearing cached selection first.
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut(); // or: await googleSignIn.disconnect();
+      final GoogleSignInAccount? gUser = await googleSignIn.signIn();
       if (gUser == null) {
         setState(() => _loading = false);
         return; // aborted
       }
+      
       final gAuth = await gUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: gAuth.accessToken,

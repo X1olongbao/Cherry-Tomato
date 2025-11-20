@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'landingpage/landing_page.dart';
 import 'utilities/init.dart';
+import 'utilities/usage_lifecycle_host.dart';
 
 class CherryTomatoApp extends StatelessWidget {
   const CherryTomatoApp({super.key});
@@ -24,5 +25,5 @@ class CherryTomatoApp extends StatelessWidget {
 // so that authentication and session storage are ready for UI interactions.
 Future<void> main() async {
   await initializeBackend();
-  runApp(const CherryTomatoApp());
+  runApp(const UsageLifecycleHost(child: CherryTomatoApp()));
 }

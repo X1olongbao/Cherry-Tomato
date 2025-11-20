@@ -1,5 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'homepage_app.dart';
+import '../models/task.dart';
+import '../services/session_service.dart';
+import '../services/task_service.dart';
+import 'pomodoro_timer.dart';
 
 class CalendarPage extends StatefulWidget {
   final List<Task> tasks;
@@ -13,6 +17,8 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   DateTime _selectedDate = DateTime.now();
   late ScrollController _dayScrollController;
+  final Set<int> _expandedTaskIndices = <int>{};
+  bool _hasCentered = false;
 
   double _dayWidth = 0;
 
@@ -23,7 +29,6 @@ class _CalendarPageState extends State<CalendarPage> {
   void initState() {
     super.initState();
     _dayScrollController = ScrollController();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _centerSelectedDay());
   }
 
   @override
@@ -47,14 +52,24 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   void _centerSelectedDay() {
+    if (_dayWidth == 0) return; // Wait for width to be calculated
     final idx = _selectedDate.day - 1;
     final screenWidth = MediaQuery.of(context).size.width;
-    final totalWidth = _daysInMonth * _dayWidth;
-    double offset = (idx * _dayWidth) - (screenWidth / 2 - _dayWidth / 2);
+    // Account for container padding (12 on each side = 24 total)
+    final scrollableWidth = screenWidth - 24;
+    // Each item has width _dayWidth + 8 (4 padding on each side)
+    final itemWidth = _dayWidth + 8;
+    final totalWidth = _daysInMonth * itemWidth;
+    
+    // Calculate the center position of the selected day
+    final selectedDayCenter = (idx * itemWidth) + (_dayWidth / 2);
+    // Calculate offset to center the selected day in the viewport
+    double offset = selectedDayCenter - (scrollableWidth / 2);
 
+    // Clamp the offset to valid scroll range
     if (offset < 0) offset = 0;
-    if (offset > totalWidth - screenWidth) offset = totalWidth - screenWidth;
-    if (totalWidth <= screenWidth) offset = 0;
+    if (offset > totalWidth - scrollableWidth) offset = totalWidth - scrollableWidth;
+    if (totalWidth <= scrollableWidth) offset = 0;
 
     _dayScrollController.animateTo(
       offset,
@@ -81,48 +96,144 @@ class _CalendarPageState extends State<CalendarPage> {
     return months[month - 1];
   }
 
-  List<Task> get _tasksForDay {
-    final selectedDay =
-        "${_monthName(_selectedDate.month)} ${_selectedDate.day}, ${_selectedDate.year}";
-    return widget.tasks.where((t) => t.date == selectedDay).toList();
+  String _formatDate(Task task) {
+    if (task.dueAt == null) return '--/--/----';
+    final dt = DateTime.fromMillisecondsSinceEpoch(task.dueAt!);
+    return '${dt.month}/${dt.day}/${dt.year}';
   }
 
-  Widget _buildTaskCard(Task task) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
-        ],
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 80,
+  String _formatMonthDay(Task task) {
+    if (task.dueAt == null) return 'No due date';
+    final dt = DateTime.fromMillisecondsSinceEpoch(task.dueAt!);
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ];
+    final month = months[dt.month - 1];
+    return "$month ${dt.day}";
+  }
+
+  DateTime _parseDeadline(Task task) {
+    if (task.dueAt != null) {
+      return DateTime.fromMillisecondsSinceEpoch(task.dueAt!);
+    }
+    return DateTime.now();
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _relativeDeadlineText(DateTime deadline) {
+    final now = DateTime.now();
+    final diff = deadline.difference(now);
+    final abs = diff.abs();
+    if (abs.inDays >= 1) {
+      final d = abs.inDays;
+      return diff.isNegative
+          ? "$d day${d > 1 ? 's' : ''} ago"
+          : "in $d day${d > 1 ? 's' : ''}";
+    } else if (abs.inHours >= 1) {
+      final h = abs.inHours;
+      return diff.isNegative
+          ? "$h hour${h > 1 ? 's' : ''} ago"
+          : "in $h hour${h > 1 ? 's' : ''}";
+    } else {
+      final m = abs.inMinutes;
+      return diff.isNegative
+          ? "$m min${m > 1 ? 's' : ''} ago"
+          : "in $m min${m > 1 ? 's' : ''}";
+    }
+  }
+
+  Color _priorityColor(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.high:
+        return Colors.red;
+      case TaskPriority.medium:
+        return Colors.orange;
+      case TaskPriority.low:
+      default:
+        return Colors.blue;
+    }
+  }
+
+  IconData _priorityIcon(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.high:
+        return Icons.warning_amber_rounded;
+      case TaskPriority.medium:
+        return Icons.bolt;
+      case TaskPriority.low:
+      default:
+        return Icons.arrow_downward_rounded;
+    }
+  }
+
+  List<Task> get _tasksForDay {
+    return widget.tasks.where((t) {
+      if (t.dueAt == null) return false;
+      final dt = DateTime.fromMillisecondsSinceEpoch(t.dueAt!);
+      return dt.year == _selectedDate.year &&
+          dt.month == _selectedDate.month &&
+          dt.day == _selectedDate.day;
+    }).toList();
+  }
+
+  Widget _buildTaskCard(Task task, int index) {
+    final isExpandable = task.subtasks.isNotEmpty;
+    final isExpanded = _expandedTaskIndices.contains(index);
+    final Color priorityColor = _priorityColor(task.priority);
+
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: isExpandable
+              ? () {
+                  setState(() {
+                    if (isExpanded) {
+                      _expandedTaskIndices.remove(index);
+                    } else {
+                      _expandedTaskIndices.add(index);
+                    }
+                  });
+                }
+              : null,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: task.priority == "High"
-                  ? Colors.red
-                  : task.priority == "Medium"
-                      ? Colors.orange
-                      : Colors.blue,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                bottomLeft: Radius.circular(12),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(
+                    color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+              ],
+              color: Colors.white,
+              border: Border(
+                left: BorderSide(color: priorityColor, width: 10),
               ),
             ),
-          ),
-          Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(
                 children: [
                   Checkbox(
                     value: task.isDone,
                     onChanged: (val) {
-                      setState(() => task.isDone = val ?? false);
+                      if (val == true && !task.isDone) {
+                        unawaited(SessionService.instance
+                            .recordTaskSnapshot(task));
+                        unawaited(TaskService.instance.refreshActiveTasks());
+                      }
                     },
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
@@ -132,67 +243,194 @@ class _CalendarPageState extends State<CalendarPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          task.title,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: Colors.black,
-                            decoration: task.isDone
-                                ? TextDecoration.lineThrough
-                                : TextDecoration.none,
-                            decorationThickness: 2,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                task.title,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: Colors.black,
+                                  decoration: task.isDone
+                                      ? TextDecoration.lineThrough
+                                      : TextDecoration.none,
+                                  decorationThickness: 2,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
                             const Icon(Icons.calendar_today,
                                 color: Colors.amber, size: 16),
                             const SizedBox(width: 4),
-                            Text(
-                              task.date,
-                              style: const TextStyle(color: Colors.amber),
-                            ),
+                            Text(_formatDate(task),
+                                style: const TextStyle(color: Colors.amber)),
                             const SizedBox(width: 12),
                             Icon(
-                              task.priority == "High"
-                                  ? Icons.warning_amber_rounded
-                                  : task.priority == "Medium"
-                                      ? Icons.bolt
-                                      : Icons.arrow_downward_rounded,
-                              color: task.priority == "High"
-                                  ? Colors.red
-                                  : task.priority == "Medium"
-                                      ? Colors.orange
-                                      : Colors.blue,
+                              _priorityIcon(task.priority),
+                              color: priorityColor,
                               size: 16,
                             ),
+                            const Spacer(),
                             if (task.totalSubtasks > 0) ...[
-                              const SizedBox(width: 12),
                               Text(
-                                "Subtask: ${task.completedSubtasks}/${task.totalSubtasks}",
-                                style: const TextStyle(color: Colors.green),
-                              ),
+                                  "Subtask: ${task.completedSubtasks}/${task.totalSubtasks}",
+                                  style: const TextStyle(
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.w600)),
                             ],
                           ],
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.play_arrow, color: Colors.red, size: 28),
+                  GestureDetector(
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PomodoroTimerPage(task: task),
+                        ),
+                      );
+                    },
+                    child: const Icon(Icons.play_arrow,
+                        color: Colors.red, size: 28),
+                  ),
                 ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: isExpanded
+              ? Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 6,
+                          offset: Offset(0, 2))
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Builder(builder: (context) {
+                          final deadline = _parseDeadline(task);
+                          final now = DateTime.now();
+                          final attention = _isSameDay(deadline, now) ||
+                              deadline.isBefore(now);
+                          final iconColor =
+                              attention ? Colors.redAccent : Colors.amber;
+                          final textColor =
+                              attention ? Colors.redAccent : Colors.black87;
+                          final rel = _relativeDeadlineText(deadline);
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.calendar_today,
+                                  size: 16, color: iconColor),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Due ${_formatMonthDay(task)}, ${task.clockTime ?? task.formattedDueTime}',
+                                      style: TextStyle(
+                                          color: textColor,
+                                          fontWeight: FontWeight.w600),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      rel,
+                                      style: TextStyle(
+                                        color: textColor.withOpacity(0.75),
+                                        fontSize: 12,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
+                        const SizedBox(height: 8),
+                        // Subtasks list
+                        ...task.subtasks.asMap().entries.map((e) {
+                          final idx = e.key;
+                          final st = e.value;
+                          return Row(
+                            children: [
+                              Checkbox(
+                                value: st.done,
+                                onChanged: (val) async {
+                                  final updated = task.subtasks
+                                      .asMap()
+                                      .entries
+                                      .map((entry) => entry.key == idx
+                                          ? entry.value.copyWith(
+                                              done: val ?? false)
+                                          : entry.value)
+                                      .toList();
+                                  await TaskService.instance
+                                      .updateSubtasks(task, updated);
+                                },
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              Expanded(
+                                child: Text(
+                                  st.text.isNotEmpty
+                                      ? st.text
+                                      : 'Subtask ${idx + 1}',
+                                  style: const TextStyle(
+                                      color: Colors.black, fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     _dayWidth = (MediaQuery.of(context).size.width - 48) / 7;
+    
+    // Auto-center on current date on first build
+    if (!_hasCentered && _dayWidth > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _centerSelectedDay();
+          _hasCentered = true;
+        }
+      });
+    }
 
     return Column(
       children: [
@@ -240,9 +478,13 @@ class _CalendarPageState extends State<CalendarPage> {
                 final day =
                     DateTime(_selectedDate.year, _selectedDate.month, i + 1);
                 final isSelected = day.day == _selectedDate.day;
-                final hasTask = widget.tasks.any((t) =>
-                    t.date ==
-                    "${_monthName(day.month)} ${day.day}, ${day.year}");
+                final hasTask = widget.tasks.any((t) {
+                  if (t.dueAt == null) return false;
+                  final dt = DateTime.fromMillisecondsSinceEpoch(t.dueAt!);
+                  return dt.year == day.year &&
+                      dt.month == day.month &&
+                      dt.day == day.day;
+                });
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -331,7 +573,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   : ListView.builder(
                       itemCount: _tasksForDay.length,
                       itemBuilder: (context, i) =>
-                          _buildTaskCard(_tasksForDay[i]),
+                          _buildTaskCard(_tasksForDay[i], i),
                     ),
             ),
           ),

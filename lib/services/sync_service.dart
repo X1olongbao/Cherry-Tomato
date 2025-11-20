@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/pomodoro_session.dart';
+import '../models/task.dart';
+import 'task_service.dart';
 import 'api_service.dart';
 import 'database_service.dart';
 import '../utilities/logger.dart';
@@ -18,7 +20,6 @@ class SyncService {
   final _connectivity = Connectivity();
   StreamSubscription<ConnectivityResult>? _sub;
   bool _isSyncing = false;
-  int _retryCount = 0;
 
   /// Start listening to connectivity changes and sync when internet becomes available.
   void start() {
@@ -114,11 +115,28 @@ class SyncService {
 
       Logger.i('🔁 Starting sync...');
 
-      // Attach user to any local anonymous sessions
+      // Attach user to any local anonymous tasks/sessions
+      await DatabaseService.instance.attachUserToUnsyncedTasks(supabaseUserId);
       await DatabaseService.instance.attachUserToUnsyncedSessions(supabaseUserId);
 
+      // First sync tasks so FK constraints succeed
+      final unsyncedTasks =
+          await DatabaseService.instance.getUnsyncedTasks(supabaseUserId);
+      Logger.i('🧾 Unsynced tasks: ${unsyncedTasks.length}');
+      for (final task in unsyncedTasks) {
+        Logger.i('📤 Uploading task ${task.id}');
+        final uploaded = await _uploadTaskWithRetry(task);
+        if (uploaded) {
+          await DatabaseService.instance.markTaskSynced(task.id);
+          Logger.i('✅ Task ${task.id} uploaded');
+        } else {
+          Logger.w('⚠️ Task ${task.id} not uploaded — will keep as unsynced');
+        }
+      }
+
       // Fetch unsynced sessions for this user
-      final unsynced = await DatabaseService.instance.getUnsyncedSessions(supabaseUserId);
+      final unsynced =
+          await DatabaseService.instance.getUnsyncedSessions(supabaseUserId);
       
       // Debug: Show session counts
       final allLocalSessions = await DatabaseService.instance.getSessions(userId: supabaseUserId);
@@ -126,29 +144,26 @@ class SyncService {
       Logger.i('📦 Found ${unsynced.length} unsynced sessions');
       Logger.i('📊 SQLite total sessions: ${allLocalSessions.length}');
       
-      if (unsynced.isEmpty) {
-        Logger.i('✅ No unsynced sessions found');
-        _retryCount = 0; // reset backoff
-        // Still reconcile local with remote to reflect server-side deletions
-        await _reconcileLocalWithRemote(supabaseUserId);
-        return;
-      }
-
-      Logger.i('📤 Uploading ${unsynced.length} session(s) to Supabase');
-      for (final session in unsynced) {
-        Logger.i('📤 Uploading session ${session.id}');
-        final uploaded = await _uploadSingleWithRetry(session);
-        if (uploaded) {
-          await DatabaseService.instance.markSessionSynced(session.id);
-          Logger.i('✅ Session ${session.id} uploaded');
-        } else {
-          Logger.w('⚠️ Session ${session.id} not uploaded — will keep as unsynced');
+      if (unsynced.isNotEmpty) {
+        Logger.i('📤 Uploading ${unsynced.length} session(s) to Supabase');
+        for (final session in unsynced) {
+          Logger.i('📤 Uploading session ${session.id}');
+          final uploaded = await _uploadSingleWithRetry(session);
+          if (uploaded) {
+            await DatabaseService.instance.markSessionSynced(session.id);
+            Logger.i('✅ Session ${session.id} uploaded');
+          } else {
+            Logger.w(
+                '⚠️ Session ${session.id} not uploaded — will keep as unsynced');
+          }
         }
+        Logger.i('🎉 Session sync complete');
+      } else {
+        Logger.i('✅ No unsynced sessions found');
       }
-      Logger.i('🎉 All sessions synced');
-      _retryCount = 0;
 
       // After syncing, reconcile local with remote to remove entries deleted on server
+      await _reconcileTasksWithRemote(supabaseUserId);
       await _reconcileLocalWithRemote(supabaseUserId);
     } catch (e) {
       Logger.e('❌ Sync error: $e');
@@ -158,31 +173,27 @@ class SyncService {
   }
 
   /// Upload sessions with exponential backoff retry and detailed error logging.
-  Future<bool> _uploadWithRetry(List<PomodoroSession> sessions) async {
+  // Removed unused bulk upload retry method; single-session retry remains.
+
+  Future<bool> _uploadTaskWithRetry(Task task) async {
     const maxRetries = 3;
-    while (_retryCount < maxRetries) {
+    var attempt = 0;
+    while (attempt < maxRetries) {
       try {
-        final ok = await ApiService.instance.uploadSessions(sessions);
+        final ok = await ApiService.instance.uploadTask(task);
         if (ok) return true;
-        
-        // Log failed sessions for debugging
-        for (final session in sessions) {
-          Logger.w('❌ Sync failed for session ${session.id}: API returned false');
-        }
+        Logger.w('❌ Sync failed for task ${task.id}: API returned false');
       } catch (e) {
-        Logger.w('❌ Upload attempt ${_retryCount + 1}/$maxRetries failed: $e');
-        for (final session in sessions) {
-          Logger.w('❌ Sync failed for session ${session.id}: $e');
-        }
+        Logger.w('❌ Upload attempt ${attempt + 1}/$maxRetries failed for task ${task.id}: $e');
       }
-      _retryCount++;
-      if (_retryCount < maxRetries) {
-        final delay = Duration(seconds: 1 << (_retryCount - 1)); // 1,2,4 seconds
-        Logger.i('⏳ Retrying in ${delay.inSeconds} seconds...');
+      attempt++;
+      if (attempt < maxRetries) {
+        final delay = Duration(seconds: 1 << (attempt - 1));
+        Logger.i('⏳ Retrying task ${task.id} in ${delay.inSeconds} seconds...');
         await Future.delayed(delay);
       }
     }
-    Logger.e('❌ All retry attempts failed. Will retry on next internet connection.');
+    Logger.e('❌ All retry attempts failed for task ${task.id}. Will retry later.');
     return false;
   }
 
@@ -216,13 +227,17 @@ class SyncService {
     try {
       Logger.i('🧮 Reconciling local with remote for user $userId');
       final remote = await ApiService.instance.fetchSessionsForUser(userId);
-      final remoteSigs = remote.map((s) => '${s.duration}|${s.completedAt}').toSet();
+      final remoteSigs = remote
+          .map((s) => '${s.taskId ?? ''}|${s.duration}|${s.completedAt}')
+          .toSet();
       final local = await DatabaseService.instance.getSessions(userId: userId);
-      final localSigs = local.map((s) => '${s.duration}|${s.completedAt}').toSet();
+      final localSigs = local
+          .map((s) => '${s.taskId ?? ''}|${s.duration}|${s.completedAt}')
+          .toSet();
 
       int removed = 0;
       for (final s in local) {
-        final sig = '${s.duration}|${s.completedAt}';
+        final sig = '${s.taskId ?? ''}|${s.duration}|${s.completedAt}';
         if (s.synced && !remoteSigs.contains(sig)) {
           await DatabaseService.instance.deleteSession(s.id);
           removed++;
@@ -232,15 +247,13 @@ class SyncService {
 
       int added = 0;
       for (final r in remote) {
-        final sig = '${r.duration}|${r.completedAt}';
+        final sig = '${r.taskId ?? ''}|${r.duration}|${r.completedAt}';
         if (!localSigs.contains(sig)) {
           // Cache remote session locally so it is visible offline
           await DatabaseService.instance.insertSession(
-            PomodoroSession(
-              id: '', // generate local UUID
+            r.copyWith(
+              id: '', // generate local UUID locally
               userId: r.userId ?? userId,
-              duration: r.duration,
-              completedAt: r.completedAt,
               synced: true,
             ),
           );
@@ -251,6 +264,29 @@ class SyncService {
       Logger.i('🧹 Reconciliation complete. Removed $removed, added $added.');
     } catch (e) {
       Logger.w('⚠️ Reconciliation skipped due to error: $e');
+    }
+  }
+  
+  Future<void> _reconcileTasksWithRemote(String userId) async {
+    try {
+      Logger.i('🧮 Reconciling tasks for user $userId');
+      final remoteTasks = await ApiService.instance.fetchTasksForUser(userId);
+      final localTasks = await DatabaseService.instance.getTasks();
+      final localIds = localTasks.map((t) => t.id).toSet();
+
+      int added = 0;
+      for (final task in remoteTasks) {
+        if (!localIds.contains(task.id)) {
+          await DatabaseService.instance.insertTask(task.copyWith(synced: true));
+          added++;
+        }
+      }
+      Logger.i('🧹 Task reconciliation complete. Added $added remote tasks.');
+      if (added > 0) {
+        unawaited(TaskService.instance.refreshActiveTasks());
+      }
+    } catch (e) {
+      Logger.w('⚠️ Task reconciliation skipped due to error: $e');
     }
   }
 }

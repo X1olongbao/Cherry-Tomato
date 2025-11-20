@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/pomodoro_session.dart';
+import '../models/task.dart';
 import '../utilities/constants.dart';
 import '../utilities/logger.dart';
 
@@ -45,7 +46,7 @@ class ApiService {
 
       // Insert rows and select inserted values for verification
       final inserted = await _client
-          .from(Constants.remoteTable)
+          .from(Constants.remoteSessionTable)
           .insert(payload)
           .select();
 
@@ -76,39 +77,30 @@ class ApiService {
   Future<List<PomodoroSession>> fetchSessionsForUser(String userId) async {
     try {
       final rows = await _client
-          .from(Constants.remoteTable)
+          .from(Constants.remoteSessionTable)
           .select()
           .eq('user_id', userId)
           .order('completed_at', ascending: false);
       return (rows as List<dynamic>).map((r) {
         final m = r as Map<String, dynamic>;
-        final completed = m['completed_at'];
-        int completedMs;
-        if (completed is String) {
-          try {
-            final s = completed;
-            final hasTz = s.contains('Z') || RegExp(r"[+-]\\d{2}:\\d{2}").hasMatch(s);
-            final parsed = DateTime.parse(hasTz ? s : '${s}+08:00');
-            completedMs = parsed.toUtc().millisecondsSinceEpoch;
-          } catch (_) {
-            // Fallback to now (UTC) if parse fails
-            completedMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-          }
-        } else if (completed is num) {
-          completedMs = DateTime.fromMillisecondsSinceEpoch(completed.toInt(), isUtc: true)
-              .toUtc()
-              .millisecondsSinceEpoch;
-        } else {
-          completedMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-        }
-        return PomodoroSession(
-          // Remote id is BIGSERIAL (int); store as string for client model
-          id: (m['id']).toString(),
-          userId: m['user_id'] as String?,
-          duration: (m['duration'] as num).toInt(),
-          completedAt: completedMs,
-          synced: true,
-        );
+        final normalized = {
+          'id': (m['id']).toString(),
+          'user_id': m['user_id'],
+          'task_id': m['task_id'],
+          'task_name': m['task_name'],
+          'task_created_at': m['task_created_at'],
+          'task_due_at': m['task_due_at'],
+          'duration': m['duration'],
+          'session_type': m['session_type'],
+          'custom_duration': m['custom_duration'],
+          'completed_at': m['completed_at'],
+          'finished_at': m['finished_at'],
+          'task_completed':
+              (m['task_completed'] == true || m['task_completed'] == 1) ? 1 : 0,
+          'synced': 1,
+        };
+        return PomodoroSession.fromMap(
+            Map<String, dynamic>.from(normalized));
       }).toList();
     } on PostgrestException catch (e) {
       throw RemoteFailure(message: e.message);
@@ -131,7 +123,7 @@ class ApiService {
           '🧪 Single payload types: user_id=${m['user_id']?.runtimeType}, duration=${m['duration']?.runtimeType}, completed_at=${m['completed_at']?.runtimeType}, synced=${m['synced']?.runtimeType}');
 
       final inserted = await _client
-          .from(Constants.remoteTable)
+          .from(Constants.remoteSessionTable)
           .insert(m)
           .select();
 
@@ -147,6 +139,43 @@ class ApiService {
       throw const RemoteFailure(message: 'Network connection error');
     } catch (e) {
       Logger.e('❌ Unknown upload error: $e');
+      throw RemoteFailure(message: e.toString());
+    }
+  }
+
+  Future<bool> uploadTask(Task task) async {
+    try {
+      final payload = task.toRemoteMap();
+      final inserted = await _client
+          .from(Constants.remoteTasksTable)
+          .upsert(payload, onConflict: 'id')
+          .select();
+      return inserted is List && inserted.isNotEmpty;
+    } on PostgrestException catch (e) {
+      Logger.e('❌ Upload task failed: ${e.message}');
+      throw RemoteFailure(message: e.message);
+    } on SocketException {
+      throw const RemoteFailure(message: 'Network connection error');
+    } catch (e) {
+      throw RemoteFailure(message: e.toString());
+    }
+  }
+
+  Future<List<Task>> fetchTasksForUser(String userId) async {
+    try {
+      final rows = await _client
+          .from(Constants.remoteTasksTable)
+          .select()
+          .eq('user_id', userId);
+      return (rows as List<dynamic>)
+          .map((r) => Task.fromRemoteMap(
+              Map<String, dynamic>.from(r as Map<dynamic, dynamic>)))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw RemoteFailure(message: e.message);
+    } on SocketException {
+      throw const RemoteFailure(message: 'Network connection error');
+    } catch (e) {
       throw RemoteFailure(message: e.toString());
     }
   }

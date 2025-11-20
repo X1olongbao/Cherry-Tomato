@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'create_new_task.dart';
 import 'calendar_page.dart';
 import 'pomodoro_timer.dart';
@@ -6,28 +8,16 @@ import 'statistic_page.dart';
 import 'profile.dart';
 import 'session_history_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'notification_page.dart';
+import '../services/notification_service.dart';
+import '../services/auth_service.dart';
+import '../services/profile_service.dart';
+import '../services/session_service.dart';
+import '../services/task_service.dart';
+import '../models/task.dart';
+import '../models/session_type.dart';
 
 const tomatoRed = Color(0xFFE53935);
-
-class Task {
-  final String title;
-  final String date; // stored as "August 8, 2025"
-  final String priority;
-  final String time;
-  final int completedSubtasks;
-  final int totalSubtasks;
-  bool isDone;
-
-  Task({
-    required this.title,
-    required this.date,
-    required this.priority,
-    required this.time,
-    required this.completedSubtasks,
-    required this.totalSubtasks,
-    this.isDone = false,
-  });
-}
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -38,28 +28,113 @@ class Homepage extends StatefulWidget {
 
 class _HomepageState extends State<Homepage> {
   int _selectedIndex = 0;
-  final List<Task> _tasks = [];
+  final TaskService _taskService = TaskService.instance;
+  List<Task> _tasks = [];
+  final Set<int> _expandedTaskIndices = <int>{};
 
-  String _formatDate(String longDate) {
-    final parts = longDate.replaceAll(',', '').split(' ');
-    final monthNames = {
-      "January": 1,
-      "February": 2,
-      "March": 3,
-      "April": 4,
-      "May": 5,
-      "June": 6,
-      "July": 7,
-      "August": 8,
-      "September": 9,
-      "October": 10,
-      "November": 11,
-      "December": 12,
-    };
-    final month = monthNames[parts[0]] ?? 1;
-    final day = parts[1];
-    final year = parts[2];
-    return "$month/$day/$year";
+  @override
+  void initState() {
+    super.initState();
+    _taskService.activeTasks.addListener(_handleTaskUpdates);
+    _handleTaskUpdates();
+    unawaited(_taskService.refreshActiveTasks());
+  }
+
+  @override
+  void dispose() {
+    _taskService.activeTasks.removeListener(_handleTaskUpdates);
+    super.dispose();
+  }
+
+  void _handleTaskUpdates() {
+    setState(() {
+      _tasks = _taskService.activeTasks.value;
+    });
+  }
+
+  String _formatDate(Task task) {
+    if (task.dueAt == null) return '--/--/----';
+    final dt = DateTime.fromMillisecondsSinceEpoch(task.dueAt!);
+    return '${dt.month}/${dt.day}/${dt.year}';
+  }
+
+  // Readable month-day for dropdown: e.g., "December 1"
+  String _formatMonthDay(Task task) {
+    if (task.dueAt == null) return 'No due date';
+    final dt = DateTime.fromMillisecondsSinceEpoch(task.dueAt!);
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ];
+    final month = months[dt.month - 1];
+    return "$month ${dt.day}";
+  }
+
+  DateTime _parseDeadline(Task task) {
+    if (task.dueAt != null) {
+      return DateTime.fromMillisecondsSinceEpoch(task.dueAt!);
+    }
+    return DateTime.now();
+  }
+
+  Color _priorityColor(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.high:
+        return Colors.red;
+      case TaskPriority.medium:
+        return Colors.orange;
+      case TaskPriority.low:
+      default:
+        return Colors.blue;
+    }
+  }
+
+  IconData _priorityIcon(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.high:
+        return Icons.warning_amber_rounded;
+      case TaskPriority.medium:
+        return Icons.bolt;
+      case TaskPriority.low:
+      default:
+        return Icons.arrow_downward_rounded;
+    }
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _relativeDeadlineText(DateTime deadline) {
+    final now = DateTime.now();
+    final diff = deadline.difference(now);
+    final abs = diff.abs();
+    if (abs.inDays >= 1) {
+      final d = abs.inDays;
+      return diff.isNegative
+          ? "$d day${d > 1 ? 's' : ''} ago"
+          : "in $d day${d > 1 ? 's' : ''}";
+    } else if (abs.inHours >= 1) {
+      final h = abs.inHours;
+      return diff.isNegative
+          ? "$h hour${h > 1 ? 's' : ''} ago"
+          : "in $h hour${h > 1 ? 's' : ''}";
+    } else {
+      final m = abs.inMinutes;
+      return diff.isNegative
+          ? "$m min${m > 1 ? 's' : ''} ago"
+          : "in $m min${m > 1 ? 's' : ''}";
+    }
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
@@ -69,7 +144,7 @@ class _HomepageState extends State<Homepage> {
         _buildHomeContent(), // 0 → Home
         CalendarPage(tasks: _tasks), // 1 → Calendar
         StatisticPage(tasks: _tasks), // 2 → Statistics Page with task data
-        const ProfilePage(), // 3 → Profile
+        ProfilePage(onBack: () => _onItemTapped(0)), // 3 → Profile
       ];
 
   @override
@@ -101,14 +176,13 @@ class _HomepageState extends State<Homepage> {
         child: FloatingActionButton(
           backgroundColor: Colors.white,
           elevation: 3,
+          focusElevation: 0,
+          hoverElevation: 0,
+          highlightElevation: 0,
+          splashColor: Colors.transparent,
           shape: const CircleBorder(),
           onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const PomodoroTimerPage(),
-              ),
-            );
+            // Cherry button intentionally disabled; timer accessible via task cards.
           },
           child: Image.asset(
             "assets/Homepage/pomodoro timer icon.png",
@@ -132,26 +206,75 @@ class _HomepageState extends State<Homepage> {
             children: [
               Image.asset('assets/Homepage/tiny tomato.png',
                   width: 56, height: 56, fit: BoxFit.contain),
-              const Icon(Icons.notifications_none,
-                  color: Colors.black, size: 32),
+              ValueListenableBuilder(
+                valueListenable: NotificationService.instance.notifications,
+                builder: (context, list, _) {
+                  final unread = list.where((n) => !n.read).length;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.notifications_none,
+                          color: Colors.black,
+                          size: 32,
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      if (unread > 0)
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE53935), // tomato red
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            constraints: const BoxConstraints(minWidth: 20),
+                            child: Text(
+                              unread.toString(),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Builder(builder: (context) {
-            final user = Supabase.instance.client.auth.currentUser;
-            final meta = user?.userMetadata;
-            final username = (meta is Map<String, dynamic>)
-                ? meta['username'] as String?
-                : null;
-            final name = (username != null && username.isNotEmpty)
-                ? username
-                : 'Cherry'; // fallback without using email
-            return Text('Hi there, $name',
-                style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black));
-          }),
+          ValueListenableBuilder<String?>(
+            valueListenable: ProfileService.instance.displayName,
+            builder: (context, profileUsername, _) {
+              // Fallbacks if profile username missing
+              final user = AuthService.instance.currentUser;
+              final username = profileUsername?.trim().isNotEmpty == true
+                  ? profileUsername!.trim()
+                  : (user?.username?.isNotEmpty == true
+                      ? user!.username!
+                      : (user?.email?.split('@').first ?? 'Cherry'));
+              return Text('Hi there, $username',
+                  style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black));
+            },
+          ),
           const SizedBox(height: 24),
           Center(
             child: Container(
@@ -195,14 +318,14 @@ class _HomepageState extends State<Homepage> {
               Row(children: [
                 TextButton(
                   onPressed: () async {
-                    final newTask = await Navigator.push(
+                    final created = await Navigator.push<bool>(
                       context,
                       MaterialPageRoute(
                         builder: (context) => const CreateNewTaskPage(),
                       ),
                     );
-                    if (newTask != null && newTask is Task) {
-                      setState(() => _tasks.add(newTask));
+                    if (created == true) {
+                      unawaited(_taskService.refreshActiveTasks());
                     }
                   },
                   child: const Text('Add Task',
@@ -236,44 +359,54 @@ class _HomepageState extends State<Homepage> {
               itemCount: _tasks.length,
               itemBuilder: (context, i) {
                 final task = _tasks[i];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [
-                      BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 6,
-                          offset: Offset(0, 2))
-                    ],
-                    color: Colors.white,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 80,
+                final isExpandable = task.subtasks.isNotEmpty;
+                final isExpanded = _expandedTaskIndices.contains(i);
+                final Color priorityColor = _priorityColor(task.priority);
+
+                return Column(
+                  children: [
+                    GestureDetector(
+                      onTap: isExpandable
+                          ? () {
+                              setState(() {
+                                if (isExpanded) {
+                                  _expandedTaskIndices.remove(i);
+                                } else {
+                                  _expandedTaskIndices.add(i);
+                                }
+                              });
+                            }
+                          : null,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: task.priority == "High"
-                              ? Colors.red
-                              : task.priority == "Medium"
-                                  ? Colors.orange
-                                  : Colors.blue,
-                          borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(12),
-                              bottomLeft: Radius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: const [
+                            BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 6,
+                                offset: Offset(0, 2))
+                          ],
+                          color: Colors.white,
+                          border: Border(
+                            left: BorderSide(color: priorityColor, width: 10),
+                          ),
                         ),
-                      ),
-                      Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                              horizontal: 8, vertical: 8),
                           child: Row(
                             children: [
                               Checkbox(
                                 value: task.isDone,
-                                onChanged: (val) =>
-                                    setState(() => task.isDone = val ?? false),
+                                onChanged: (val) {
+                                  if (val == true && !task.isDone) {
+                                    unawaited(SessionService.instance
+                                        .recordTaskSnapshot(task));
+                                    unawaited(
+                                        _taskService.refreshActiveTasks());
+                                  }
+                                },
                                 materialTapTargetSize:
                                     MaterialTapTargetSize.shrinkWrap,
                                 visualDensity: VisualDensity.compact,
@@ -281,50 +414,51 @@ class _HomepageState extends State<Homepage> {
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      task.title,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
-                                        color: Colors.black,
-                                        decoration: task.isDone
-                                            ? TextDecoration.lineThrough
-                                            : TextDecoration.none,
-                                        decorationThickness: 2,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            task.title,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
+                                              color: Colors.black,
+                                              decoration: task.isDone
+                                                  ? TextDecoration.lineThrough
+                                                  : TextDecoration.none,
+                                              decorationThickness: 2,
+                                            ),
+                                          ),
+                                        ),
+                                        // No chevron — expansion still toggles on card tap
+                                      ],
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 6),
                                     Row(
                                       children: [
                                         const Icon(Icons.calendar_today,
                                             color: Colors.amber, size: 16),
                                         const SizedBox(width: 4),
-                                        Text(_formatDate(task.date),
+                                        Text(_formatDate(task),
                                             style: const TextStyle(
                                                 color: Colors.amber)),
                                         const SizedBox(width: 12),
                                         Icon(
-                                          task.priority == "High"
-                                              ? Icons.warning_amber_rounded
-                                              : task.priority == "Medium"
-                                                  ? Icons.bolt
-                                                  : Icons
-                                                      .arrow_downward_rounded,
-                                          color: task.priority == "High"
-                                              ? Colors.red
-                                              : task.priority == "Medium"
-                                                  ? Colors.orange
-                                                  : Colors.blue,
+                                          _priorityIcon(task.priority),
+                                          color: priorityColor,
                                           size: 16,
                                         ),
+                                        const Spacer(),
                                         if (task.totalSubtasks > 0) ...[
-                                          const SizedBox(width: 12),
                                           Text(
                                               "Subtask: ${task.completedSubtasks}/${task.totalSubtasks}",
                                               style: const TextStyle(
-                                                  color: Colors.green)),
+                                                  color: Colors.green,
+                                                  fontWeight:
+                                                      FontWeight.w600)),
                                         ],
                                       ],
                                     ),
@@ -332,14 +466,21 @@ class _HomepageState extends State<Homepage> {
                                 ),
                               ),
                               GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
+                                onTap: () async {
+                                  final result = await Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) =>
                                           PomodoroTimerPage(task: task),
                                     ),
                                   );
+                                  if (result is Map &&
+                                      (result['motivational'] == true)) {
+                                    final msg = (result['message']
+                                            as String?) ??
+                                        'Keep going! Small steps lead to big wins.';
+                                    _showMotivationDialog(msg);
+                                  }
                                 },
                                 child: const Icon(Icons.play_arrow,
                                     color: Colors.red, size: 28),
@@ -348,8 +489,120 @@ class _HomepageState extends State<Homepage> {
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: isExpanded
+                          ? Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: const [
+                                  BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 6,
+                                      offset: Offset(0, 2))
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Builder(builder: (context) {
+                                      final deadline = _parseDeadline(task);
+                                      final now = DateTime.now();
+                                      final attention =
+                                          _isSameDay(deadline, now) || deadline.isBefore(now);
+                                      final iconColor =
+                                          attention ? Colors.redAccent : Colors.amber;
+                                      final textColor =
+                                          attention ? Colors.redAccent : Colors.black87;
+                                      final rel = _relativeDeadlineText(deadline);
+                                      return Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(Icons.calendar_today,
+                                              size: 16, color: iconColor),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Due ${_formatMonthDay(task)}, ${task.clockTime ?? task.formattedDueTime}',
+                                                  style: TextStyle(
+                                                      color: textColor,
+                                                      fontWeight: FontWeight.w600),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  rel,
+                                                  style: TextStyle(
+                                                    color: textColor.withOpacity(0.75),
+                                                    fontSize: 12,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }),
+                                    const SizedBox(height: 8),
+                                    // Subtasks list
+                                    ...task.subtasks.asMap().entries.map((e) {
+                                      final idx = e.key;
+                                      final st = e.value;
+                                      return Row(
+                                        children: [
+                                          Checkbox(
+                                            value: st.done,
+                                            onChanged: (val) async {
+                                              final updated = task.subtasks
+                                                  .asMap()
+                                                  .entries
+                                                  .map((entry) => entry.key == idx
+                                                      ? entry.value.copyWith(
+                                                          done: val ?? false)
+                                                      : entry.value)
+                                                  .toList();
+                                              await _taskService.updateSubtasks(
+                                                  task, updated);
+                                            },
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              st.text.isNotEmpty
+                                                  ? st.text
+                                                  : 'Subtask ${idx + 1}',
+                                              style: const TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 14),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
                 );
               },
             ),
@@ -367,4 +620,126 @@ class _HomepageState extends State<Homepage> {
           color: _selectedIndex == index ? tomatoRed : Colors.black54,
         ),
       );
+}
+
+extension on _HomepageState {
+  void _showMotivationDialog(String message) {
+    const messages = [
+      "Remember, small steps lead to big wins!",
+      "Even a tomato grows one drop at a time. Keep going next time!",
+      "Rest is part of the journey, not the failure. You got this!",
+      "One session ended, but your streak continues tomorrow!",
+      "Keep your focus sharp — every effort counts!",
+    ];
+
+    final randomMsg = messages[math.Random().nextInt(messages.length)];
+
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'Cherry Tomato',
+      barrierColor: Colors.black.withOpacity(0.35),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (ctx, anim, secondaryAnim) {
+        return PopScope(
+          canPop: false,
+          child: Center(
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 420),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 28,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.redAccent.withOpacity(0.08)),
+                ),
+                child: Stack(
+                  children: [
+                    // Decorative faint cherry watermark
+                    Positioned(
+                      right: -6,
+                      bottom: -6,
+                      child: Opacity(
+                        opacity: 0.06,
+                        child: Image.asset(
+                          'assets/sessiontoomato/minicherry.png',
+                          width: 96,
+                          height: 96,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Image.asset('assets/sessiontoomato/minicherry.png', width: 26, height: 26),
+                              const SizedBox(width: 10),
+                              Text(
+                                "Cherry Tomato",
+                                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            randomMsg,
+                            style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
+                                  fontSize: 16,
+                                  height: 1.45,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Top-right circular close button
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Material(
+                        color: Colors.grey.shade200,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () => Navigator.of(ctx).pop(),
+                          splashColor: Colors.black12,
+                          child: const SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: Icon(Icons.close, size: 20, color: Colors.black87),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (ctx, anim, secondaryAnim, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutQuad);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+}
 }

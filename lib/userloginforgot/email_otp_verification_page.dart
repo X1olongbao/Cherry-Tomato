@@ -27,7 +27,7 @@ class OtpContext {
 class EmailOtpVerificationPage extends StatefulWidget {
   final OtpContext otpContext;
 
-  const EmailOtpVerificationPage({Key? key, required this.otpContext}) : super(key: key);
+  const EmailOtpVerificationPage({super.key, required this.otpContext});
 
   @override
   State<EmailOtpVerificationPage> createState() => _EmailOtpVerificationPageState();

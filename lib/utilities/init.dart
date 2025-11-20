@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
+import '../services/profile_service.dart';
 import 'constants.dart';
 import 'logger.dart';
 
@@ -29,6 +30,8 @@ Future<void> initializeBackend() async {
       authFlowType: AuthFlowType.pkce,
     );
     Logger.i('✅ Supabase initialized');
+    // Load profile for current user (if any)
+    await ProfileService.instance.refreshCurrentUserProfile();
   } catch (e) {
     // Gracefully handle initialization errors (invalid key, network issues)
     Logger.e('❌ Supabase client init failed: $e');
@@ -47,8 +50,12 @@ Future<void> initializeBackend() async {
     if (user != null) {
       Logger.i('Auth state changed: user logged in, starting sync');
       SyncService.instance.syncUnsyncedSessionsForCurrentUser();
+      // Refresh profile display name when user logs in
+      ProfileService.instance.refreshCurrentUserProfile();
     } else {
       Logger.i('Auth state changed: user logged out');
+      // Clear profile display name when user logs out
+      ProfileService.instance.displayName.value = null;
     }
   });
 }

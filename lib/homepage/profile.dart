@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/userloginforgot/login_page.dart';
+import 'package:tomatonator/homepage/privacy_security_page.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -31,7 +34,7 @@ class _ProfilePageState extends State<ProfilePage> {
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () => _handleBack(context),
                     child: const Icon(Icons.arrow_back, color: Colors.black),
                   ),
                   const SizedBox(width: 16),
@@ -203,6 +206,17 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  void _handleBack(BuildContext context) {
+    if (widget.onBack != null) {
+      widget.onBack!();
+      return;
+    }
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+  }
+
   Widget _buildListTile(IconData icon, String title) {
     return Container(
       decoration: BoxDecoration(
@@ -226,7 +240,13 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {},
+        onTap: () {
+          if (title == 'Privacy') {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PrivacySecurityPage()),
+            );
+          }
+        },
       ),
     );
   }
@@ -257,7 +277,7 @@ class _ProfilePageState extends State<ProfilePage> {
         trailing: Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: tomatoRed,
+          activeThumbColor: tomatoRed,
         ),
       ),
     );

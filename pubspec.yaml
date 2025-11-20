@@ -26,6 +26,10 @@ dependencies:
   # HTTP client for calling secure backend endpoints (Edge Functions)
   http: ^1.2.0
 
+  # Audio for focus-check alarm
+  audioplayers: ^5.2.1
+  shared_preferences: ^2.2.2
+
 
   cupertino_icons: ^1.0.2
 
@@ -55,7 +59,7 @@ flutter:
     - assets/login page/devicon_google.png
     - assets/Homepage/goal.png
     - assets/Homepage/tiny tomato.png
-    - assets/Homepage/vector.png
+    - assets/Homepage/Vector.png
     - assets/Homepage/calendar icon.png
     - assets/Homepage/Home icon.png
     - assets/Homepage/pomodoro timer icon.png
@@ -67,3 +71,5 @@ flutter:
     - assets/Forgot pass/Group 216.png
     - assets/timer/Group 230.png
     - assets/stats/CHERRY TOMATO LOGO-01 2.png
+    - assets/sounds/alarm.wav
+    - assets/sessiontoomato/minicherry.png

@@ -117,7 +117,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         foregroundColor: Colors.white,
-      ).copyWith(
+  ).copyWith(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (!_formValid) return tomatoRed.withValues(alpha: 0.35);
           return tomatoRed;
