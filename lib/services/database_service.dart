@@ -15,7 +15,7 @@ class DatabaseService {
   static final DatabaseService instance = DatabaseService._();
 
   static const _dbName = 'cherry_tomato.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
   static const _sessionTable = 'sessions';
   static const _taskTable = 'tasks';
   final _uuid = const Uuid();
@@ -141,6 +141,47 @@ class DatabaseService {
     await _database.delete(_sessionTable, where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Delete all sessions for a user (or all sessions if userId is null).
+  Future<void> deleteAllSessions({String? userId}) async {
+    if (_useInMemory) {
+      if (userId != null) {
+        _mem.removeWhere((s) => s.userId == userId);
+      } else {
+        _mem.clear();
+      }
+      return;
+    }
+    if (userId != null) {
+      await _database.delete(_sessionTable, where: 'user_id = ?', whereArgs: [userId]);
+    } else {
+      await _database.delete(_sessionTable);
+    }
+  }
+
+  /// Delete all finished/completed task sessions for a user.
+  Future<void> deleteFinishedTaskSessions({String? userId}) async {
+    if (_useInMemory) {
+      if (userId != null) {
+        _mem.removeWhere((s) => s.userId == userId && s.taskCompleted);
+      } else {
+        _mem.removeWhere((s) => s.taskCompleted);
+      }
+      return;
+    }
+    if (userId != null) {
+      await _database.delete(
+        _sessionTable, 
+        where: 'user_id = ? AND task_completed = 1', 
+        whereArgs: [userId],
+      );
+    } else {
+      await _database.delete(
+        _sessionTable,
+        where: 'task_completed = 1',
+      );
+    }
+  }
+
   // -------- TASKS --------
 
   Future<Task> insertTask(Task task) async {
@@ -158,19 +199,39 @@ class DatabaseService {
     return candidate;
   }
 
-  Future<List<Task>> getTasks({TaskStatus? status}) async {
+  Future<List<Task>> getTasks({TaskStatus? status, String? userId}) async {
     if (_useInMemory) {
       final list = _memTasks
-          .where((t) => status == null || t.status == status)
+          .where((t) => 
+              (status == null || t.status == status) &&
+              (userId == null || t.userId == userId))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     }
+    
+    // Build WHERE clause with user_id filter
+    final whereParts = <String>[];
+    final whereArgs = <dynamic>[];
+    
+    if (userId != null) {
+      whereParts.add('user_id = ?');
+      whereArgs.add(userId);
+    }
+    
+    if (status != null) {
+      whereParts.add('status = ?');
+      whereArgs.add(statusToString(status));
+    }
+    
+    final whereClause = whereParts.isEmpty 
+        ? null 
+        : whereParts.join(' AND ');
+    
     final maps = await _database.query(
       _taskTable,
-      where: status == null ? null : 'status = ?',
-      whereArgs:
-          status == null ? null : [statusToString(status)],
+      where: whereClause,
+      whereArgs: whereArgs.isEmpty ? null : whereArgs,
       orderBy: 'created_at DESC',
     );
     return maps.map((m) => Task.fromMap(m)).toList();
@@ -325,6 +386,7 @@ class DatabaseService {
         duration INTEGER NOT NULL,
         session_type TEXT NOT NULL DEFAULT 'pomodoro',
         custom_duration INTEGER,
+        preset_mode TEXT,
         completed_at INTEGER NOT NULL,
         finished_at INTEGER,
         task_completed INTEGER NOT NULL DEFAULT 0,
@@ -405,6 +467,10 @@ class DatabaseService {
           synced INTEGER NOT NULL DEFAULT 0
         );
       ''');
+    }
+    if (oldVersion < 3) {
+      await _safeAddColumn(
+          db, _sessionTable, 'preset_mode', 'TEXT');
     }
   }
 

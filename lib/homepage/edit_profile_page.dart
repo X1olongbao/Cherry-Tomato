@@ -1,0 +1,425 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tomatonator/services/auth_service.dart';
+import 'package:tomatonator/services/profile_service.dart';
+
+const tomatoRed = Color(0xFFE53935);
+
+class EditProfilePage extends StatefulWidget {
+  const EditProfilePage({super.key});
+
+  @override
+  State<EditProfilePage> createState() => _EditProfilePageState();
+}
+
+class _EditProfilePageState extends State<EditProfilePage> {
+  final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _imagePicker = ImagePicker();
+  bool _isLoading = false;
+  bool _isSaving = false;
+  String? _avatarUrl;
+  File? _selectedImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileData();
+  }
+
+  Future<void> _loadProfileData() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = AuthService.instance.currentUser;
+      if (user != null) {
+        _usernameController.text = user.username ?? '';
+        _emailController.text = user.email ?? '';
+        
+        // Load avatar URL from profiles table
+        final supabase = Supabase.instance.client;
+        final profile = await supabase
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', user.id)
+            .maybeSingle();
+        
+        if (profile != null && profile['avatar_url'] != null) {
+          _avatarUrl = profile['avatar_url'] as String;
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load profile: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick image: $e')),
+      );
+    }
+  }
+
+  Future<String?> _uploadImage(File imageFile, String userId) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      
+      // Read file bytes
+      final bytes = await imageFile.readAsBytes();
+      
+      // Upload to Supabase storage (use Uint8List directly)
+      await supabase.storage.from('avatars').uploadBinary(
+        fileName,
+        bytes,
+        fileOptions: const FileOptions(
+          contentType: 'image/jpeg',
+          upsert: true,
+        ),
+      );
+      
+      // Get public URL
+      final url = supabase.storage.from('avatars').getPublicUrl(fileName);
+      return url;
+    } catch (e) {
+      throw Exception('Failed to upload image: $e');
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final user = AuthService.instance.currentUser;
+      if (user == null) {
+        throw Exception('No user logged in');
+      }
+
+      final supabase = Supabase.instance.client;
+      final username = _usernameController.text.trim();
+      final email = _emailController.text.trim();
+
+      // Upload image if selected
+      String? avatarUrl = _avatarUrl;
+      if (_selectedImage != null) {
+        avatarUrl = await _uploadImage(_selectedImage!, user.id);
+      }
+
+      // Update profile in profiles table
+      final profileData = <String, dynamic>{
+        'id': user.id,
+      };
+      
+      if (username.isNotEmpty && username != user.username) {
+        profileData['username'] = username;
+      }
+      
+      if (avatarUrl != null) {
+        profileData['avatar_url'] = avatarUrl;
+      }
+      
+      if (profileData.length > 1) { // More than just id
+        await supabase.from('profiles').upsert(profileData);
+      }
+
+      // Update email in auth (if changed)
+      // Note: Changing email requires verification, so we'll update it but user needs to verify
+      if (email.isNotEmpty && email != user.email) {
+        try {
+          await supabase.auth.updateUser(
+            UserAttributes(email: email),
+          );
+        } catch (e) {
+          // Email update might require verification - continue with username update
+          // User will need to verify new email separately
+        }
+      }
+
+      // Update user metadata with username
+      await supabase.auth.updateUser(
+        UserAttributes(data: {'username': username}),
+      );
+
+      // Refresh profile service
+      await ProfileService.instance.refreshCurrentUserProfile();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated successfully'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(true); // Return true to indicate success
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update profile: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Edit Profile',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Profile Picture Section
+                    Center(
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            CircleAvatar(
+                              radius: 60,
+                              backgroundColor: Colors.black12,
+                              backgroundImage: _selectedImage != null
+                                  ? FileImage(_selectedImage!)
+                                  : (_avatarUrl != null
+                                      ? NetworkImage(_avatarUrl!)
+                                      : const AssetImage('assets/profile/profile_pic.png')) as ImageProvider,
+                            ),
+                            Positioned(
+                              bottom: 4,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: tomatoRed,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Username Field
+                    Text(
+                      'Username',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
+                          )
+                        ],
+                      ),
+                      child: TextFormField(
+                        controller: _usernameController,
+                        decoration: InputDecoration(
+                          hintText: 'Enter username',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.person_outline,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Username is required';
+                          }
+                          if (value.trim().length < 3) {
+                            return 'Username must be at least 3 characters';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Email Field
+                    Text(
+                      'Email',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
+                          )
+                        ],
+                      ),
+                      child: TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          hintText: 'Enter email',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.email_outlined,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Email is required';
+                          }
+                          if (!value.contains('@') || !value.contains('.')) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+
+                    // Save Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _saveProfile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: tomatoRed,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 3,
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'Save Changes',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}
+

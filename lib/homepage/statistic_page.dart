@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../services/database_service.dart';
+import '../services/auth_service.dart';
 import 'package:tomatonator/services/app_usage_service.dart';
 
 const tomatoRed = Color(0xFFE53935);
@@ -104,7 +105,9 @@ class StatisticPage extends StatelessWidget {
               const SizedBox(height: 16),
 
               FutureBuilder<List<Task>>(
-                future: DatabaseService.instance.getTasks(),
+                future: DatabaseService.instance.getTasks(
+                  userId: AuthService.instance.currentUser?.id,
+                ),
                 builder: (context, snapshot) {
                   final list = snapshot.data ?? const <Task>[];
                   final pending = list.where((t) => t.isDone != true).length;

@@ -45,8 +45,15 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
     if (!_formValid) return;
     try {
       final client = Supabase.instance.client;
-      // Requires an active session for the target user.
+      
+      // Check if we have an active session (from OTP verification)
+      if (client.auth.currentUser == null) {
+        throw Exception('No active session. Please verify OTP again.');
+      }
+      
+      // Update password using the active session
       await client.auth.updateUser(UserAttributes(password: _pass1.text));
+      
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -55,12 +62,18 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
       );
     } catch (e) {
       Logger.e('Password update failed: $e');
+      final errorMsg = e.toString().toLowerCase();
+      String message = 'Failed to update password';
+      if (errorMsg.contains('401') || errorMsg.contains('session')) {
+        message = 'Session expired. Please verify OTP again.';
+      } else if (errorMsg.contains('network')) {
+        message = 'Network error. Please check your connection.';
+      } else {
+        message = 'Failed to update password: $e';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to update password: ${e.toString().contains('401') ? 'Please sign in first.' : e}',
-          ),
-        ),
+        SnackBar(content: Text(message)),
       );
     }
   }

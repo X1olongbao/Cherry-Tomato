@@ -77,6 +77,7 @@ class MainActivity : FlutterActivity() {
                         val pkgs = (call.argument<List<String>>("packages") ?: emptyList())
                         val intent = Intent(this, AppBlockerService::class.java)
                         intent.putStringArrayListExtra(AppBlockerService.EXTRA_BLOCKED_PACKAGES, ArrayList(pkgs))
+                        // Dismiss duration is fixed at 30 seconds in AppBlockerService
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             ContextCompat.startForegroundService(this, intent)
                         } else {

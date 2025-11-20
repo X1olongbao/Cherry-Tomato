@@ -19,6 +19,7 @@ class SessionService {
     required int durationMinutes,
     Task? task,
     bool manualCompletion = false,
+    String? presetMode,
   }) async {
     final user = AuthService.instance.currentUser;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -54,6 +55,7 @@ class SessionService {
       duration: durationMinutes,
       sessionType: sessionType.dbValue,
       customDuration: null,
+      presetMode: presetMode,
       completedAt: nowMs,
       finishedAt: nowMs,
       taskCompleted: taskCompleted,

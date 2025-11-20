@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'login_page.dart';
 import 'email_otp_verification_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:math';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -35,7 +34,7 @@ class _SignUpPageState extends State<SignUpPage> {
       _emailCtrl.text.isNotEmpty &&
       _passwordCtrl.text.isNotEmpty;
 
-  // Generate OTP, send via Supabase Edge Function, and navigate to OTP verification.
+  // Send OTP via Supabase and navigate to OTP verification.
   Future<void> _handleSignup() async {
     if (_loading) return;
     setState(() {
@@ -47,26 +46,17 @@ class _SignUpPageState extends State<SignUpPage> {
       final username = _usernameCtrl.text.trim();
       final password = _passwordCtrl.text;
 
-      // Generate in-memory OTP and expiry (15 minutes)
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghijkmnopqrstuvwxyz';
-      final rand = Random.secure();
-      final code = List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
-      final expiryIso = DateTime.now().toUtc().add(const Duration(minutes: 15)).toIso8601String();
-
-      // Call Supabase Edge Function to send the OTP email
-      final response = await Supabase.instance.client.functions.invoke(
-        'send_otp_email',
-        body: {
-          'email': email,
-          'passcode': code,
-          'expiry': expiryIso,
+      // Use Supabase's built-in OTP functionality
+      final supabase = Supabase.instance.client;
+      await supabase.auth.signInWithOtp(
+        email: email,
+        shouldCreateUser: true,
+        data: {
+          'username': username,
+          // Store password temporarily in metadata for later use
+          'temp_password': password,
         },
       );
-
-      final status = response.status ?? 200;
-      if (status < 200 || status >= 300) {
-        throw Exception('Failed to send OTP email. Status: $status');
-      }
 
       if (!mounted) return;
       final ctx = OtpContext(
@@ -74,8 +64,6 @@ class _SignUpPageState extends State<SignUpPage> {
         email: email,
         username: username,
         password: password,
-        otp: code,
-        expiryIso: expiryIso,
       );
 
       Navigator.push(
@@ -85,7 +73,7 @@ class _SignUpPageState extends State<SignUpPage> {
     } catch (e) {
       setState(() => _error = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Navigation failed: $e')),
+        SnackBar(content: Text('Failed to send OTP: ${e.toString()}')),
       );
     } finally {
       if (mounted) setState(() => _loading = false);

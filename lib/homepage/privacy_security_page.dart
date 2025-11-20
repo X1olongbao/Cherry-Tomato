@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
@@ -79,38 +81,6 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     }
   }
 
-  Future<void> _logoutAllDevices() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Logout from All Devices'),
-        content: const Text('Are you sure you want to logout from all devices?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Logout')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      // Supabase global signout; falls back if not supported
-      await Supabase.instance.client.auth.signOut(scope: SignOutScope.global);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Logged out from all devices')));
-    } catch (_) {
-      try {
-        await Supabase.instance.client.auth.signOut();
-        if (!mounted) return;
-        messenger.showSnackBar(const SnackBar(content: Text('Logged out on this device')));
-      } catch (e) {
-        if (!mounted) return;
-        messenger.showSnackBar(SnackBar(content: Text('Logout failed: $e')));
-      }
-    }
-  }
-
-  // Removed unused filtered list (local search handles filtering within the sheet).
 
   @override
   void initState() {
@@ -140,8 +110,12 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       setState(() {
         _installedApps = apps;
       });
+      // Load icons for all apps after scanning
+      await _ensureIconsForSelected();
       if (apps.isEmpty) {
         messenger.showSnackBar(const SnackBar(content: Text('No launchable user apps found.')));
+      } else {
+        messenger.showSnackBar(SnackBar(content: Text('Found ${apps.length} apps')));
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Failed to scan apps: $e')));
@@ -169,12 +143,13 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
 
   Future<void> _ensureIconsForSelected() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    for (final pkg in _selectedApps) {
-      if (_appIcons.containsKey(pkg)) continue;
-      final bytes = await _fetchAppIcon(pkg);
-      if (bytes != null) {
+    // Load icons for all installed apps, not just selected ones
+    for (final app in _installedApps) {
+      if (_appIcons.containsKey(app.package)) continue;
+      final bytes = await _fetchAppIcon(app.package);
+      if (bytes != null && mounted) {
         setState(() {
-          _appIcons[pkg] = bytes;
+          _appIcons[app.package] = bytes;
         });
       }
     }
@@ -196,10 +171,11 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       await _scanApps();
     }
     if (!mounted) return;
-    final localSearch = TextEditingController(text: _searchCtrl.text);
+    final localSearch = TextEditingController();
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
@@ -207,79 +183,144 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
             final items = (_installedApps.isEmpty ? const <_InstalledApp>[] : _installedApps)
                 .where((a) => query.isEmpty || a.name.toLowerCase().contains(query) || a.package.toLowerCase().contains(query))
                 .toList(growable: false);
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+            
+            return Container(
+              height: MediaQuery.of(ctx).size.height * 0.9,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey.shade200),
+                      ),
+                    ),
+                    child: Row(
                       children: [
-                        const Text('Select Apps to Block', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                        const Text(
+                          'Select Apps to Block',
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        ),
                         const Spacer(),
+                        if (_isScanning)
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () async {
+                              await _scanApps();
+                              setSheetState(() {});
+                            },
+                            tooltip: 'Rescan apps',
+                          ),
                         IconButton(
-                          icon: const Icon(Icons.refresh),
-                          onPressed: _isScanning ? null : () async {
-                            await _scanApps();
-                            setSheetState(() {});
-                          },
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(ctx).pop(),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
+                  ),
+                  // Search bar
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: TextField(
                       controller: localSearch,
                       onChanged: (_) => setSheetState(() {}),
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.search),
-                        hintText: 'Search apps',
+                        hintText: 'Search apps...',
                         filled: true,
                         fillColor: Colors.grey.shade100,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
                         ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Flexible(
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final app = items[index];
-                          final selected = _selectedApps.contains(app.package);
-                          return CheckboxListTile(
-                            value: selected,
-                            onChanged: (val) {
-                              setState(() {
-                                if (val == true) {
-                                  _selectedApps.add(app.package);
-                                } else {
-                                  _selectedApps.remove(app.package);
-                                }
-                              });
-                              _saveBlockedApps();
-                              setSheetState(() {});
-                            },
-                            title: Text(app.name),
-                            subtitle: Text(app.package, style: const TextStyle(color: Colors.black54)),
-                            controlAffinity: ListTileControlAffinity.leading,
-                          );
-                        },
+                  ),
+                  // App list
+                  Expanded(
+                    child: _isScanning && _installedApps.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : items.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.apps, size: 64, color: Colors.grey.shade400),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      query.isEmpty ? 'No apps found' : 'No apps match your search',
+                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : GridView.builder(
+                                padding: const EdgeInsets.all(16),
+                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 0.75,
+                                ),
+                                itemCount: items.length,
+                                itemBuilder: (context, index) {
+                                  return _buildAppCard(items[index], setSheetState);
+                                },
+                              ),
+                  ),
+                  // Footer with selected count and done button
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      border: Border(
+                        top: BorderSide(color: Colors.grey.shade200),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: const Text('Done'),
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${_selectedApps.length} app${_selectedApps.length != 1 ? 's' : ''} selected',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE53935),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'Done',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },
@@ -287,6 +328,113 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       },
     );
     localSearch.dispose();
+  }
+
+  Widget _buildAppCard(_InstalledApp app, StateSetter setSheetState) {
+    final selected = _selectedApps.contains(app.package);
+    final iconBytes = _appIcons[app.package];
+    
+    return GestureDetector(
+      onTap: () async {
+        setState(() {
+          if (selected) {
+            _selectedApps.remove(app.package);
+          } else {
+            _selectedApps.add(app.package);
+            // Load icon if not already loaded
+            if (!_appIcons.containsKey(app.package)) {
+              _fetchAppIcon(app.package).then((bytes) {
+                if (bytes != null && mounted) {
+                  setState(() {
+                    _appIcons[app.package] = bytes;
+                  });
+                }
+              });
+            }
+          }
+        });
+        await _saveBlockedApps();
+        setSheetState(() {});
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE53935).withOpacity(0.1) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? const Color(0xFFE53935) : Colors.grey.shade300,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: iconBytes != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(
+                            iconBytes,
+                            width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : const Icon(Icons.apps, color: Colors.black54, size: 32),
+                ),
+                if (selected)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE53935),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                app.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  color: selected ? const Color(0xFFE53935) : Colors.black87,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _ensureInterceptionPermissions() async {
@@ -429,28 +577,6 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _tileHeader(Icons.logout, 'Logout from All Devices'),
-                const SizedBox(height: 8),
-                _helpText('Logs you out from all sessions on all devices.'),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _logoutAllDevices,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                    child: const Text('Logout Everywhere'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           const SizedBox(height: 24),
           _sectionHeader('App Blocker & Permissions'),
           const SizedBox(height: 12),
@@ -501,144 +627,191 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _tileHeader(Icons.apps, 'App Selection'),
-                const SizedBox(height: 8),
-                _helpText('Select which apps to block during Pomodoro sessions. Applied to all sessions.'),
-                const SizedBox(height: 12),
-
-                // Add-style picker trigger (instead of Scan button)
-                if (_installedApps.isEmpty) ...[
-                  GestureDetector(
-                    onTap: _showAppPicker,
-                    child: Container(
-                      height: 180,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            top: 14,
-                            left: 14,
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
-                              ),
-                              child: const Icon(Icons.add, size: 24, color: Colors.black87),
-                            ),
-                          ),
-                        ],
+                Row(
+                  children: [
+                    const Icon(Icons.apps, color: Colors.black87),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'App Selection',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  _helpText('Tap the card to pick apps to block.'),
-                ] else ...[
-                  Row(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _isScanning ? null : _scanApps,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Rescan'),
-                      ),
-                      const SizedBox(width: 8),
-                      if (_isScanning) const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const Spacer(),
-                      ElevatedButton.icon(
-                        onPressed: _showAppPicker,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Apps'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-
-                // Removed inline search; search is available inside the picker
-                const SizedBox(height: 4),
-                // Card container shows currently blocked apps with icons
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _helpText('Select which apps to block during Pomodoro sessions. Applied to all sessions.'),
+                const SizedBox(height: 16),
+                // Selected apps display with integrated plus button
                 Container(
                   width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 280), // Fit 3 rows initially, scrollable if more
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
+                    color: Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
-                  child: Stack(
-                    children: [
-                      // Plus button is the only clickable area to add apps
-                      Positioned(
-                        top: 6,
-                        left: 6,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: _showAppPicker,
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
-                            ),
-                            child: const Icon(Icons.add, size: 22, color: Colors.black87),
+                  child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 0.75,
                           ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 52),
-                        child: _selectedApps.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'No apps selected',
-                                  style: TextStyle(color: Colors.grey.shade700),
-                                ),
-                              )
-                            : Wrap(
-                                spacing: 12,
-                                runSpacing: 12,
-                                children: _selectedApps.map((pkg) {
-                                  final info = _installedApps.firstWhere(
-                                    (a) => a.package == pkg,
-                                    orElse: () => _InstalledApp(pkg.split('.').last, pkg),
-                                  );
-                                  final iconBytes = _appIcons[pkg];
-                                  return SizedBox(
-                                    width: 96,
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 24,
-                                          backgroundColor: Colors.white,
-                                          backgroundImage: iconBytes != null ? MemoryImage(iconBytes) : null,
-                                          child: iconBytes == null ? const Icon(Icons.apps, color: Colors.black54) : null,
+                          itemCount: _selectedApps.length + 1, // Plus button + all apps (no limit)
+                          itemBuilder: (context, index) {
+                            // First item is the plus button
+                            if (index == 0) {
+                              return GestureDetector(
+                                onTap: () async {
+                                  if (_installedApps.isEmpty || _isScanning) {
+                                    await _scanApps();
+                                  }
+                                  if (mounted) {
+                                    await _showAppPicker();
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade300,
+                                          borderRadius: BorderRadius.circular(10),
                                         ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          info.name,
+                                        child: _isScanning
+                                            ? const Padding(
+                                                padding: EdgeInsets.all(12),
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2.5,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black54),
+                                                ),
+                                              )
+                                            : Icon(
+                                                Icons.add,
+                                                color: Colors.grey.shade600,
+                                                size: 20,
+                                              ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      SizedBox(
+                                        width: 70,
+                                        child: Text(
+                                          'Add',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           textAlign: TextAlign.center,
-                                          style: const TextStyle(fontSize: 12),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey.shade700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }
+                            
+                            // App icons (index - 1 because index 0 is the plus button)
+                            final appIndex = index - 1;
+                            if (appIndex >= _selectedApps.length) {
+                              return const SizedBox.shrink();
+                            }
+                            
+                            final pkg = _selectedApps.elementAt(appIndex);
+                            final info = _installedApps.firstWhere(
+                              (a) => a.package == pkg,
+                              orElse: () => _InstalledApp(pkg.split('.').last, pkg),
+                            );
+                            final iconBytes = _appIcons[pkg];
+                            
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedApps.remove(pkg);
+                                });
+                                _saveBlockedApps();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Stack(
+                                      children: [
+                                        Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade100,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: iconBytes != null
+                                              ? ClipRRect(
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  child: Image.memory(
+                                                    iconBytes,
+                                                    width: 48,
+                                                    height: 48,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                )
+                                              : const Icon(Icons.apps, color: Colors.black54, size: 18),
+                                        ),
+                                        Positioned(
+                                          top: -3,
+                                          right: -3,
+                                          child: Container(
+                                            width: 16,
+                                            height: 16,
+                                            decoration: const BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.close,
+                                              size: 9,
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  );
-                                }).toList(),
+                                    const SizedBox(height: 4),
+                                    SizedBox(
+                                      width: 70,
+                                      child: Text(
+                                        info.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                      ),
-                    ],
-                  ),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),

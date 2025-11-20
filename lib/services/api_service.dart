@@ -93,6 +93,7 @@ class ApiService {
           'duration': m['duration'],
           'session_type': m['session_type'],
           'custom_duration': m['custom_duration'],
+          'preset_mode': m['preset_mode'],
           'completed_at': m['completed_at'],
           'finished_at': m['finished_at'],
           'task_completed':

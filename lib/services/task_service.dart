@@ -20,7 +20,8 @@ class TaskService {
       ValueNotifier<List<Task>>(<Task>[]);
 
   Future<void> refreshActiveTasks() async {
-    final tasks = await DatabaseService.instance.getTasks();
+    final user = AuthService.instance.currentUser;
+    final tasks = await DatabaseService.instance.getTasks(userId: user?.id);
     final active = tasks
         .where((t) =>
             t.status == TaskStatus.pending || t.status == TaskStatus.inProgress)

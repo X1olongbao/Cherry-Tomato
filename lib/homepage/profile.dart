@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/userloginforgot/login_page.dart';
 import 'package:tomatonator/homepage/privacy_security_page.dart';
+import 'package:tomatonator/homepage/edit_profile_page.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -127,7 +128,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
               const SizedBox(height: 12),
-              _buildListTile(Icons.person_outline, "Edit Profile"),
+              _buildListTile(Icons.person_outline, "Edit Profile", onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const EditProfilePage(),
+                  ),
+                ).then((updated) {
+                  if (updated == true) {
+                    setState(() {}); // Refresh the profile page
+                  }
+                });
+              }),
               const SizedBox(height: 8),
               _buildListTile(Icons.lock_outline, "Privacy"),
 
@@ -217,7 +228,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Widget _buildListTile(IconData icon, String title) {
+  Widget _buildListTile(IconData icon, String title, {VoidCallback? onTap}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -240,7 +251,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
+        onTap: onTap ?? () {
           if (title == 'Privacy') {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PrivacySecurityPage()),

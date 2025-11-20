@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:tomatonator/models/pomodoro_session.dart';
 import 'package:tomatonator/services/session_service.dart';
 import 'package:tomatonator/services/sync_service.dart';
+import 'package:tomatonator/services/database_service.dart';
+import 'package:tomatonator/services/auth_service.dart';
 
 /// Session History: Shows local and remote Pomodoro sessions merged,
 /// indicates which entries are synced to the server.
@@ -53,6 +55,73 @@ class _SessionHistoryPageState extends State<SessionHistoryPage> {
     await SyncService.instance.manualSync(context);
     // Refresh the session list after sync
     await _load();
+  }
+
+  /// Handle clearing finished task sessions with confirmation
+  Future<void> _handleClearAllSessions() async {
+    // Filter to only finished task sessions
+    final finishedSessions = _sessions.where((s) => s.taskCompleted).toList();
+    
+    if (finishedSessions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No finished tasks to delete')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Finished Tasks'),
+        content: Text(
+          'Are you sure you want to delete all ${finishedSessions.length} finished task session(s)? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _loading = true);
+      try {
+        final user = AuthService.instance.currentUser;
+        // Delete only finished task sessions from database
+        await DatabaseService.instance.deleteFinishedTaskSessions(userId: user?.id);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleted ${finishedSessions.length} finished task session(s) successfully'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        
+        // Refresh to ensure UI is updated
+        await _load();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete finished tasks: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        setState(() => _loading = false);
+      }
+    }
   }
 
   @override
@@ -114,22 +183,40 @@ class _SessionHistoryCard extends StatelessWidget {
 
   String _formatDate(int ms) {
     final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+    final hour12 = dt.hour == 0 
+        ? 12 
+        : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    final amPm = dt.hour < 12 ? 'AM' : 'PM';
     return '${_two(dt.month)}/${_two(dt.day)}/${dt.year} '
-        '${_two(dt.hour)}:${_two(dt.minute)}';
+        '${_two(hour12)}:${_two(dt.minute)} $amPm';
   }
 
   String _two(int v) => v.toString().padLeft(2, '0');
 
   String _modeLabel() {
-    switch (session.sessionType) {
-      case 'short_break':
-        return 'Short Break • ${session.duration} min';
-      case 'long_break':
-        return 'Long Break • ${session.duration} min';
-      case 'pomodoro':
-      default:
-        return 'Pomodoro • ${session.duration} min';
+    // Get preset mode label
+    String presetLabel = 'Classic Pomodoro';
+    if (session.presetMode != null) {
+      switch (session.presetMode) {
+        case 'classic':
+          presetLabel = 'Classic Pomodoro';
+          break;
+        case 'longStudy':
+          presetLabel = 'Long Study Mode';
+          break;
+        case 'quickTask':
+          presetLabel = 'Quick Task Mode';
+          break;
+        case 'custom':
+          presetLabel = 'Custom Mode';
+          break;
+        default:
+          presetLabel = 'Classic Pomodoro';
+      }
     }
+    
+    // Just return the preset mode label
+    return presetLabel;
   }
 
   @override
@@ -242,16 +329,34 @@ class _SessionHistoryCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _HistoryDetailRow(
-                    label: 'Date created - due date',
-                    value: '$created — $due',
+                  // Date information in a cleaner layout
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _HistoryDetailRow(
+                          label: 'Date created',
+                          value: created,
+                        ),
+                        const SizedBox(height: 6),
+                        _HistoryDetailRow(
+                          label: 'Due date',
+                          value: due,
+                        ),
+                        const SizedBox(height: 6),
+                        _HistoryDetailRow(
+                          label: 'Date finished',
+                          value: finished,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  _HistoryDetailRow(
-                    label: 'Date finished',
-                    value: finished,
-                  ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   _HistoryDetailRow(
                     label: 'Pomodoro mode',
                     value: _modeLabel(),

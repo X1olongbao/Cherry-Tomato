@@ -26,6 +26,9 @@ class PomodoroSession {
   /// Custom duration for custom modes
   final int? customDuration;
 
+  /// Preset mode used: 'classic', 'longStudy', 'quickTask', 'custom'
+  final String? presetMode;
+
   /// Unix timestamp in milliseconds when the session completed
   final int completedAt;
 
@@ -48,6 +51,7 @@ class PomodoroSession {
     required this.duration,
     required this.sessionType,
     required this.customDuration,
+    this.presetMode,
     required this.completedAt,
     required this.finishedAt,
     required this.taskCompleted,
@@ -64,6 +68,7 @@ class PomodoroSession {
     int? duration,
     String? sessionType,
     int? customDuration,
+    String? presetMode,
     int? completedAt,
     int? finishedAt,
     bool? taskCompleted,
@@ -79,6 +84,7 @@ class PomodoroSession {
       duration: duration ?? this.duration,
       sessionType: sessionType ?? this.sessionType,
       customDuration: customDuration ?? this.customDuration,
+      presetMode: presetMode ?? this.presetMode,
       completedAt: completedAt ?? this.completedAt,
       finishedAt: finishedAt ?? this.finishedAt,
       taskCompleted: taskCompleted ?? this.taskCompleted,
@@ -97,6 +103,7 @@ class PomodoroSession {
       'duration': duration,
       'session_type': sessionType,
       'custom_duration': customDuration,
+      'preset_mode': presetMode,
       'completed_at': completedAt,
       'finished_at': finishedAt,
       'task_completed': taskCompleted ? 1 : 0,
@@ -126,6 +133,7 @@ class PomodoroSession {
       'duration': duration,
       'session_type': sessionType,
       'custom_duration': customDuration,
+      'preset_mode': presetMode,
       'completed_at': _toIsoPlus8(completedAt),
       'finished_at': finishedAt == null ? null : _toIsoPlus8(finishedAt!),
       'task_completed': taskCompleted,
@@ -143,6 +151,7 @@ class PomodoroSession {
       duration: (map['duration'] as num).toInt(),
       sessionType: (map['session_type'] as String?) ?? 'pomodoro',
       customDuration: _maybeNum(map['custom_duration']),
+      presetMode: map['preset_mode'] as String?,
       completedAt: _parseTimestamp(map['completed_at']) ??
           DateTime.now().millisecondsSinceEpoch,
       finishedAt: _parseTimestamp(map['finished_at']),

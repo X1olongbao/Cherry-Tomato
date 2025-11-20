@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
 import '../services/profile_service.dart';
+import '../services/task_service.dart';
 import 'constants.dart';
 import 'logger.dart';
 
@@ -46,16 +47,20 @@ Future<void> initializeBackend() async {
   Logger.i('Sync service started');
 
   // Optionally listen to auth changes to trigger sync after login/logout
-  AuthService.instance.authStateChanges.listen((user) {
+  AuthService.instance.authStateChanges.listen((user) async {
     if (user != null) {
       Logger.i('Auth state changed: user logged in, starting sync');
       SyncService.instance.syncUnsyncedSessionsForCurrentUser();
       // Refresh profile display name when user logs in
       ProfileService.instance.refreshCurrentUserProfile();
+      // Refresh tasks to show only current user's tasks
+      await TaskService.instance.refreshActiveTasks();
     } else {
       Logger.i('Auth state changed: user logged out');
       // Clear profile display name when user logs out
       ProfileService.instance.displayName.value = null;
+      // Clear tasks when user logs out
+      TaskService.instance.activeTasks.value = [];
     }
   });
 }

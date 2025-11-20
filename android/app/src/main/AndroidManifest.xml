@@ -58,5 +58,7 @@
             <action android:name="android.intent.action.MAIN"/>
             <category android:name="android.intent.category.LAUNCHER"/>
         </intent>
+        <!-- Query for package info (needed for usage stats) -->
+        <package android:name="com.example.tomatonator" />
     </queries>
 </manifest>

@@ -85,6 +85,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     _ticker?.cancel();
     _focusCheckTimer?.cancel();
     _stopAlarm();
+    // Stop app blocker when leaving the timer page
+    unawaited(_stopAppBlocker());
     super.dispose();
   }
 
@@ -142,6 +144,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     // Capture remaining at pause and clear end time
     _endAt = null;
     _focusCheckTimer?.cancel();
+    // Note: App blocker continues running during pause to maintain blocking
   }
 
   void _stopTimer() {
@@ -191,6 +194,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
           sessionType: _current,
           durationMinutes: durationMinutes,
           task: widget.task,
+          presetMode: _presetMode.name,
         );
         if (mounted) {
           final label = switch (_current) {
@@ -244,6 +248,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         sessionType: typeBefore,
         durationMinutes: durationMinutes,
         task: widget.task,
+        presetMode: _presetMode.name,
       );
       if (mounted) {
         final label = switch (typeBefore) {
@@ -1095,14 +1100,33 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   }
 
   Future<void> _startAppBlockerIfConfigured() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      Logger.i('App blocker: Not Android platform');
+      return;
+    }
     try {
       final pkgs = await _getBlockedPackages();
-      if (pkgs.isEmpty) return;
+      Logger.i('App blocker: Found ${pkgs.length} blocked packages: $pkgs');
+      if (pkgs.isEmpty) {
+        Logger.i('App blocker: No blocked packages, skipping');
+        return;
+      }
       final proceed = await _confirmPermissionsIfNeeded();
-      if (!proceed) return;
-      await _blockerChannel.invokeMethod('startAppBlocker', {'packages': pkgs});
-    } catch (_) {}
+      if (!proceed) {
+        Logger.i('App blocker: Permissions not granted, skipping');
+        return;
+      }
+      // Fixed dismiss duration: 30 seconds
+      const dismissDurationSeconds = 30;
+      Logger.i('App blocker: Starting service with packages: $pkgs');
+      final result = await _blockerChannel.invokeMethod('startAppBlocker', {
+        'packages': pkgs,
+        'dismissDurationSeconds': dismissDurationSeconds,
+      });
+      Logger.i('App blocker: Service start result: $result');
+    } catch (e) {
+      Logger.e('App blocker: Error starting service: $e');
+    }
   }
 
   Future<void> _stopAppBlocker() async {
@@ -1121,25 +1145,95 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     try {
       final usageGranted = await _blockerChannel.invokeMethod<bool>('isUsageAccessGranted') ?? false;
       final overlayGranted = await _blockerChannel.invokeMethod<bool>('isOverlayPermissionGranted') ?? false;
-      if (usageGranted && overlayGranted) return true;
+      
+      Logger.i('App blocker: Usage Access = $usageGranted, Overlay Permission = $overlayGranted');
+      
+      if (usageGranted && overlayGranted) {
+        Logger.i('App blocker: All permissions granted');
+        return true;
+      }
       if (!mounted) return false;
-      return await showDialog<bool>(
+      
+      final messenger = ScaffoldMessenger.of(context);
+      if (!usageGranted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Usage Access permission is required. Opening settings...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      if (!overlayGranted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('"Draw over other apps" permission is required. Opening settings...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      
+      final proceed = await showDialog<bool>(
             context: context,
             builder: (ctx) {
               return AlertDialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 title: const Text('Permissions Required'),
-                content: const Text('Enable Usage Access and "Draw over other apps" permissions to block selected apps.'),
+                content: Text(
+                  'To block apps, you need:\n\n'
+                  '${!usageGranted ? "1. Usage Access\n   Settings → Apps → Cherry Tomato → Special access → Usage access\n\n" : ""}'
+                  '${!overlayGranted ? "2. Draw over other apps\n   Settings → Apps → Cherry Tomato → Special access → Display over other apps\n\n" : ""}'
+                  'These are special permissions that must be enabled manually.\n\n'
+                  'Tap "Open Settings" to go to the permission screens.',
+                ),
                 actions: [
                   TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-                  ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Grant')),
+                  ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Open Settings')),
                 ],
               );
             },
           ) ??
           false;
-    } catch (_) {
-      return true;
+      if (!proceed) {
+        Logger.i('App blocker: User cancelled permission request');
+        return false;
+      }
+      // Open settings if permissions are not granted
+      if (!usageGranted) {
+        Logger.i('App blocker: Opening Usage Access settings');
+        await _blockerChannel.invokeMethod('openUsageAccessSettings');
+      }
+      if (!overlayGranted) {
+        Logger.i('App blocker: Opening Overlay settings');
+        await _blockerChannel.invokeMethod('openOverlaySettings');
+      }
+      // Give user time to grant permissions, then check again
+      await Future.delayed(const Duration(seconds: 2));
+      final usageGrantedAfter = await _blockerChannel.invokeMethod<bool>('isUsageAccessGranted') ?? false;
+      final overlayGrantedAfter = await _blockerChannel.invokeMethod<bool>('isOverlayPermissionGranted') ?? false;
+      
+      Logger.i('App blocker: After settings - Usage = $usageGrantedAfter, Overlay = $overlayGrantedAfter');
+      
+      if (usageGrantedAfter && overlayGrantedAfter) {
+        if (mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Permissions granted! App blocker is now active.')),
+          );
+        }
+        return true;
+      } else {
+        if (mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Please grant all permissions and try again.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return false;
+      }
+    } catch (e) {
+      Logger.e('App blocker: Error checking permissions: $e');
+      return false;
     }
   }
 

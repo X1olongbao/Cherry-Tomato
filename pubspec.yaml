@@ -29,6 +29,9 @@ dependencies:
   # Audio for focus-check alarm
   audioplayers: ^5.2.1
   shared_preferences: ^2.2.2
+  
+  # Image picker for profile pictures
+  image_picker: ^1.0.7
 
 
   cupertino_icons: ^1.0.2

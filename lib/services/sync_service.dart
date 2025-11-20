@@ -271,7 +271,7 @@ class SyncService {
     try {
       Logger.i('🧮 Reconciling tasks for user $userId');
       final remoteTasks = await ApiService.instance.fetchTasksForUser(userId);
-      final localTasks = await DatabaseService.instance.getTasks();
+      final localTasks = await DatabaseService.instance.getTasks(userId: userId);
       final localIds = localTasks.map((t) => t.id).toSet();
 
       int added = 0;
