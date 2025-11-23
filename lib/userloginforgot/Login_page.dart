@@ -79,15 +79,9 @@ class _LoginPageState extends State<LoginPage> {
     } on AuthFailure catch (e) {
       setState(() => _error = e.message);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
     } catch (e) {
       setState(() => _error = e.toString());
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login failed: $e')),
-      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -195,15 +189,7 @@ class _LoginPageState extends State<LoginPage> {
       );
     } catch (e) {
       setState(() => _error = 'Google sign-in failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Google sign-in succeeded, but app login failed. Please ensure Supabase Google provider is enabled or try again.'
-            ),
-          ),
-        );
-      }
+      if (mounted) {}
     } finally {
       if (mounted) setState(() => _loading = false);
     }

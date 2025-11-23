@@ -14,6 +14,7 @@ class ForgotPasswordPage extends StatefulWidget {
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _emailCtrl = TextEditingController();
   bool _showErrors = false;
+  String? _error;
 
   @override
   void initState() {
@@ -61,17 +62,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         MaterialPageRoute(builder: (_) => EmailOtpVerificationPage(otpContext: ctx)),
       );
     } catch (e) {
-      final err = e.toString();
-      final notFound = err.contains('404') || 
-                       err.toLowerCase().contains('not found') ||
-                       err.toLowerCase().contains('user not found');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            notFound ? 'No account found with this email' : 'Failed to send OTP: $err',
-          ),
-        ),
-      );
+      final err = e.toString().toLowerCase();
+      final notFound = err.contains('404') || err.contains('not found');
+      setState(() => _error = notFound ? 'No account found with this email' : 'Failed to send OTP. Please try again.');
     }
   }
 
@@ -183,6 +176,21 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: tomatoRed),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: tomatoRed),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

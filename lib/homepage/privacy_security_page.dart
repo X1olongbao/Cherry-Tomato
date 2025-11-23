@@ -8,6 +8,12 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_service.dart';
+import '../services/system_notification_service.dart';
+import '../services/task_service.dart';
+import '../models/task.dart';
+import '../services/task_reminder_service.dart';
+import '../services/database_service.dart';
+import '../utilities/logger.dart';
 
 class _InstalledApp {
   final String name;
@@ -30,6 +36,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
 
   bool notificationsEnabled = true;
   bool appBlockerEnabled = true;
+  String? _selectedTaskId;
 
   final TextEditingController _searchCtrl = TextEditingController();
   final Set<String> _selectedApps = <String>{};
@@ -50,19 +57,16 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
 
   Future<void> _handleChangePassword() async {
     if (_isOAuthLogin) return;
-    final messenger = ScaffoldMessenger.of(context);
     final oldPwd = _oldPwdCtrl.text.trim();
     final newPwd = _newPwdCtrl.text.trim();
     if (oldPwd.isEmpty || newPwd.isEmpty) {
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Enter both old and new password')));
       return;
     }
     try {
       final email = Supabase.instance.client.auth.currentUser?.email;
       if (email == null || email.isEmpty) {
         if (!mounted) return;
-        messenger.showSnackBar(const SnackBar(content: Text('No logged-in email found')));
         return;
       }
       // Basic verification: try signing in with old password (non-destructive)
@@ -70,14 +74,12 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       // If successful, update current user password
       await Supabase.instance.client.auth.updateUser(UserAttributes(password: newPwd));
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Password updated')));
       _oldPwdCtrl.clear();
       _newPwdCtrl.clear();
       // Optional: pop after success
       // navigator.pop();
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Password change failed: $e')));
     }
   }
 
@@ -86,12 +88,18 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
   void initState() {
     super.initState();
     _loadBlockedApps();
+    _loadNotificationState();
+  }
+
+  Future<void> _loadNotificationState() async {
+    final enabled = await SystemNotificationService.instance.areNotificationsEnabled();
+    setState(() {
+      notificationsEnabled = enabled;
+    });
   }
 
   Future<void> _scanApps() async {
-    final messenger = ScaffoldMessenger.of(context);
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-      messenger.showSnackBar(const SnackBar(content: Text('Scanning installed apps is available on Android only.')));
       return;
     }
     setState(() => _isScanning = true);
@@ -113,12 +121,9 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       // Load icons for all apps after scanning
       await _ensureIconsForSelected();
       if (apps.isEmpty) {
-        messenger.showSnackBar(const SnackBar(content: Text('No launchable user apps found.')));
       } else {
-        messenger.showSnackBar(SnackBar(content: Text('Found ${apps.length} apps')));
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed to scan apps: $e')));
     } finally {
       if (mounted) setState(() => _isScanning = false);
     }
@@ -439,24 +444,20 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
 
   Future<void> _ensureInterceptionPermissions() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    final messenger = ScaffoldMessenger.of(context);
     final usageGranted = await _blockerChannel.invokeMethod<bool>('isUsageAccessGranted') ?? false;
     final overlayGranted = await _blockerChannel.invokeMethod<bool>('isOverlayPermissionGranted') ?? false;
     if (!usageGranted) {
       await _blockerChannel.invokeMethod('openUsageAccessSettings');
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Enable Usage Access for Cherry Tomato.')));
     }
     if (!overlayGranted) {
       await _blockerChannel.invokeMethod('openOverlaySettings');
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Enable “Draw over other apps” permission.')));
     }
   }
 
   Future<void> _startInterception() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    final messenger = ScaffoldMessenger.of(context);
     // Prompt for permissions if needed before starting
     final proceed = await _confirmPermissionsIfNeeded();
     if (!proceed) {
@@ -468,23 +469,18 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     try {
       await _blockerChannel.invokeMethod('startAppBlocker', { 'packages': pkgs });
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('App interception started.')));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Failed to start interception: $e')));
     }
   }
 
   Future<void> _stopInterception() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await _blockerChannel.invokeMethod('stopAppBlocker');
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('App interception stopped.')));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Failed to stop interception: $e')));
     }
   }
 
@@ -533,6 +529,22 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _card(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Color(0xFFE53935)),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Debug logging is disabled for privacy. No diagnostic logs are recorded.',
+                    style: TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           _sectionHeader('Security'),
           const SizedBox(height: 12),
           _card(
@@ -590,8 +602,195 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                   alignment: Alignment.centerRight,
                   child: Switch(
                     value: notificationsEnabled,
-                    onChanged: (val) => setState(() => notificationsEnabled = val),
+                    onChanged: (val) async {
+                      setState(() => notificationsEnabled = val);
+                      Logger.i('Notification toggle: $val');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Notifications ${val ? 'enabled' : 'disabled'}')),
+                        );
+                      }
+                      await SystemNotificationService.instance.setNotificationsEnabled(val);
+                      if (!val) {
+                        // Cancel all notifications when disabled
+                        await SystemNotificationService.instance.cancelAllNotifications();
+                      }
+                    },
                     activeThumbColor: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _tileHeader(Icons.science, 'Notification Self-Test'),
+                const SizedBox(height: 8),
+                _helpText('Use these buttons to verify notifications work in foreground/background.'),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            await SystemNotificationService.instance.notifyPomodoroStart(taskName: 'Test');
+                          },
+                          child: const Text('Show Now'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            final when = DateTime.now().add(const Duration(seconds: 10));
+                            await SystemNotificationService.instance.scheduleGeneralReminder(
+                              title: 'Test Notification',
+                              message: 'Scheduled +10 seconds',
+                              reminderTime: when,
+                            );
+                          },
+                          child: const Text('Schedule +10s'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ValueListenableBuilder<List<Task>>(
+                  valueListenable: TaskService.instance.activeTasks,
+                  builder: (context, tasks, _) {
+                    final items = tasks;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedTaskId,
+                                items: items
+                                    .map((t) => DropdownMenuItem(
+                                          value: t.id,
+                                          child: Text(t.title, overflow: TextOverflow.ellipsis),
+                                        ))
+                                    .toList(),
+                                onChanged: (val) => setState(() => _selectedTaskId = val),
+                                decoration: const InputDecoration(
+                                  labelText: 'Select a task',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              height: 44,
+                              child: ElevatedButton(
+                                onPressed: (_selectedTaskId == null)
+                                    ? null
+                                    : () async {
+                                        final t = items.firstWhere((x) => x.id == _selectedTaskId);
+                                        final when = DateTime.now().add(const Duration(minutes: 1));
+                                        await SystemNotificationService.instance.scheduleTaskReminder(
+                                          taskId: t.id,
+                                          taskTitle: t.title,
+                                          reminderTime: when,
+                                          reminderType: 'due_soon',
+                                          customMessage: '"${t.title}" is due in 1 minute.',
+                                        );
+                                      },
+                                child: const Text('Schedule Selected +1m'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 44,
+                                child: OutlinedButton(
+                                  onPressed: (_selectedTaskId == null)
+                                      ? null
+                                      : () async {
+                                          final t = items.firstWhere((x) => x.id == _selectedTaskId);
+                                          await TaskReminderService.instance.scheduleRemindersForTask(t);
+                                        },
+                                  child: const Text('Reschedule From due_at'),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: SizedBox(
+                                height: 44,
+                                child: OutlinedButton(
+                                  onPressed: (_selectedTaskId == null)
+                                      ? null
+                                      : () async {
+                                          final t = items.firstWhere((x) => x.id == _selectedTaskId);
+                                          final rows = await DatabaseService.instance.getTaskReminders(t.id);
+                                          if (!mounted) return;
+                                          await showDialog<void>(
+                                            context: context,
+                                            builder: (ctx) {
+                                              return AlertDialog(
+                                                title: const Text('Scheduled Reminders'),
+                                                content: SizedBox(
+                                                  width: double.maxFinite,
+                                                  child: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: rows.isEmpty
+                                                        ? [const Text('None')]
+                                                        : rows.map((m) {
+                                                            final ts = DateTime.fromMillisecondsSinceEpoch((m['reminder_time'] as num).toInt());
+                                                            final type = (m['reminder_type'] ?? '').toString();
+                                                            return Text('$type • ${ts.toLocal()}');
+                                                          }).toList(),
+                                                  ),
+                                                ),
+                                                actions: [
+                                                  TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+                                                ],
+                                              );
+                                            },
+                                          );
+                                        },
+                                  child: const Text('Show Scheduled'),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      final when = DateTime.now().add(const Duration(minutes: 1));
+                      await SystemNotificationService.instance.scheduleTaskReminder(
+                        taskId: 'test-task',
+                        taskTitle: 'Sample Task',
+                        reminderTime: when,
+                        reminderType: 'due_soon',
+                        customMessage: 'Sample Task is due in 1 minute.',
+                      );
+                    },
+                    child: const Text('Schedule Task Reminder +1m'),
                   ),
                 ),
               ],

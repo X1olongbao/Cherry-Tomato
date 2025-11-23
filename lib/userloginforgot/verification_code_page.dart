@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../utilities/logger.dart';
 import '../services/verification_service.dart';
 import 'otp_input.dart';
 import '../homepage/homepage_app.dart';
 import 'set_new_pass.dart';
+import '../utilities/logger.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -110,9 +110,6 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
     } catch (e) {
       Logger.e('Verification failed: $e');
       setState(() => _error = e.toString());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_error ?? 'Verification failed')),
-      );
     } finally {
       if (mounted) setState(() => _verifying = false);
     }

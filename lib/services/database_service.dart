@@ -15,9 +15,10 @@ class DatabaseService {
   static final DatabaseService instance = DatabaseService._();
 
   static const _dbName = 'cherry_tomato.db';
-  static const _dbVersion = 3;
+  static const _dbVersion = 4;
   static const _sessionTable = 'sessions';
   static const _taskTable = 'tasks';
+  static const _taskRemindersTable = 'task_reminders';
   final _uuid = const Uuid();
 
   Database? _db;
@@ -202,32 +203,29 @@ class DatabaseService {
   Future<List<Task>> getTasks({TaskStatus? status, String? userId}) async {
     if (_useInMemory) {
       final list = _memTasks
-          .where((t) => 
+          .where((t) =>
               (status == null || t.status == status) &&
-              (userId == null || t.userId == userId))
+              (userId == null || t.userId == userId || t.userId == null || (t.userId?.isEmpty ?? false)))
           .toList();
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     }
-    
-    // Build WHERE clause with user_id filter
+
     final whereParts = <String>[];
     final whereArgs = <dynamic>[];
-    
+
     if (userId != null) {
-      whereParts.add('user_id = ?');
+      whereParts.add('(user_id = ? OR user_id IS NULL OR user_id = "")');
       whereArgs.add(userId);
     }
-    
+
     if (status != null) {
       whereParts.add('status = ?');
       whereArgs.add(statusToString(status));
     }
-    
-    final whereClause = whereParts.isEmpty 
-        ? null 
-        : whereParts.join(' AND ');
-    
+
+    final whereClause = whereParts.isEmpty ? null : whereParts.join(' AND ');
+
     final maps = await _database.query(
       _taskTable,
       where: whereClause,
@@ -420,6 +418,20 @@ class DatabaseService {
         synced INTEGER NOT NULL DEFAULT 0
       );
     ''');
+
+    await db.execute('''
+      CREATE TABLE $_taskRemindersTable (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        user_id TEXT,
+        reminder_type TEXT NOT NULL,
+        reminder_time INTEGER NOT NULL,
+        notification_id INTEGER,
+        is_sent INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (task_id) REFERENCES $_taskTable(id) ON DELETE CASCADE
+      );
+    ''');
   }
 
   Future<void> _upgradeTables(Database db, int oldVersion) async {
@@ -472,6 +484,21 @@ class DatabaseService {
       await _safeAddColumn(
           db, _sessionTable, 'preset_mode', 'TEXT');
     }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS $_taskRemindersTable (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          user_id TEXT,
+          reminder_type TEXT NOT NULL,
+          reminder_time INTEGER NOT NULL,
+          notification_id INTEGER,
+          is_sent INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES $_taskTable(id) ON DELETE CASCADE
+        );
+      ''');
+    }
   }
 
   Future<void> _safeAddColumn(
@@ -481,5 +508,97 @@ class DatabaseService {
     } catch (_) {
       // ignore if column already exists
     }
+  }
+
+  // Task Reminders Methods
+  Future<String> insertTaskReminder({
+    required String taskId,
+    required String? userId,
+    required String reminderType,
+    required DateTime reminderTime,
+    int? notificationId,
+  }) async {
+    final id = _uuid.v4();
+    final map = {
+      'id': id,
+      'task_id': taskId,
+      'user_id': userId,
+      'reminder_type': reminderType,
+      'reminder_time': reminderTime.millisecondsSinceEpoch,
+      'notification_id': notificationId,
+      'is_sent': 0,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    };
+    if (_useInMemory) {
+      // In-memory storage would need a model class - skip for now
+      return id;
+    }
+    await _database.insert(_taskRemindersTable, map);
+    return id;
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingReminders({String? userId}) async {
+    if (_useInMemory) {
+      return [];
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final where = userId == null 
+        ? 'is_sent = 0 AND reminder_time <= ?'
+        : 'is_sent = 0 AND reminder_time <= ? AND user_id = ?';
+    final whereArgs = userId == null 
+        ? [now]
+        : [now, userId];
+    return await _database.query(
+      _taskRemindersTable,
+      where: where,
+      whereArgs: whereArgs,
+      orderBy: 'reminder_time ASC',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getTaskReminders(String taskId) async {
+    if (_useInMemory) {
+      return [];
+    }
+    return await _database.query(
+      _taskRemindersTable,
+      where: 'task_id = ?',
+      whereArgs: [taskId],
+      orderBy: 'reminder_time ASC',
+    );
+  }
+
+  Future<void> markReminderSent(String reminderId) async {
+    if (_useInMemory) {
+      return;
+    }
+    await _database.update(
+      _taskRemindersTable,
+      {'is_sent': 1},
+      where: 'id = ?',
+      whereArgs: [reminderId],
+    );
+  }
+
+  Future<void> deleteTaskReminders(String taskId) async {
+    if (_useInMemory) {
+      return;
+    }
+    await _database.delete(
+      _taskRemindersTable,
+      where: 'task_id = ?',
+      whereArgs: [taskId],
+    );
+  }
+
+  Future<void> deleteReminder(String reminderId) async {
+    if (_useInMemory) {
+      return;
+    }
+    await _database.delete(
+      _taskRemindersTable,
+      where: 'id = ?',
+      whereArgs: [reminderId],
+    );
   }
 }

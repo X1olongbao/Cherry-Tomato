@@ -14,6 +14,7 @@ import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../services/session_service.dart';
 import '../services/task_service.dart';
+import '../services/database_service.dart';
 import '../models/task.dart';
 import '../models/session_type.dart';
 
@@ -550,6 +551,8 @@ class _HomepageState extends State<Homepage> {
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
+                                                const SizedBox(height: 6),
+                                                _NextReminderTicker(taskId: task.id, color: textColor.withOpacity(0.85)),
                                               ],
                                             ),
                                           ),
@@ -620,6 +623,97 @@ class _HomepageState extends State<Homepage> {
           color: _selectedIndex == index ? tomatoRed : Colors.black54,
         ),
       );
+}
+
+class _NextReminderTicker extends StatefulWidget {
+  final String taskId;
+  final Color color;
+  const _NextReminderTicker({required this.taskId, required this.color});
+  @override
+  State<_NextReminderTicker> createState() => _NextReminderTickerState();
+}
+
+class _NextReminderTickerState extends State<_NextReminderTicker> {
+  DateTime? _next;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      if (_next == null || now.second % 5 == 0) {
+        _load();
+      }
+      setState(() {});
+    });
+  }
+
+  Future<void> _load() async {
+    final rows = await DatabaseService.instance.getTaskReminders(widget.taskId);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    DateTime? best;
+    for (final m in rows) {
+      final ts = (m['reminder_time'] as num).toInt();
+      if (ts >= nowMs) {
+        final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+        if (best == null || dt.isBefore(best)) best = dt;
+      }
+    }
+    if (mounted) setState(() => _next = best);
+  }
+
+  String _formatClock(DateTime dt) {
+    final h24 = dt.hour;
+    final ampm = h24 >= 12 ? 'PM' : 'AM';
+    var h12 = h24 % 12;
+    if (h12 == 0) h12 = 12;
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h12:$m $ampm';
+  }
+
+  String _formatDiff(DateTime dt) {
+    final now = DateTime.now();
+    final d = dt.difference(now);
+    if (d.isNegative) return 'due now';
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    if (h > 0) return '${h}h ${m}m ${s}s';
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.notifications_active, size: 16, color: Colors.black54),
+        const SizedBox(width: 6),
+        Expanded(
+          child: GestureDetector(
+            onTap: _load,
+            child: Text(
+              _next == null
+                  ? 'No reminder scheduled'
+                  : 'Next reminder ${_formatClock(_next!)} • ${_formatDiff(_next!)}',
+              style: TextStyle(color: widget.color, fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 extension on _HomepageState {

@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-
 import '../models/task.dart';
 import '../models/session_type.dart';
-import '../utilities/logger.dart';
 import 'auth_service.dart';
 import 'database_service.dart';
+import 'task_reminder_service.dart';
 
 class TaskProgressResult {
   final Task task;
@@ -69,6 +69,8 @@ class TaskService {
     );
     final saved = await DatabaseService.instance.insertTask(task);
     await refreshActiveTasks();
+    // Schedule reminders for the new task
+    await TaskReminderService.instance.scheduleRemindersForTask(saved);
     return saved;
   }
 
@@ -77,6 +79,8 @@ class TaskService {
   }
 
   Future<void> deleteTask(String id) async {
+    // Cancel reminders before deleting task
+    await TaskReminderService.instance.cancelRemindersForTask(id);
     await DatabaseService.instance.deleteTask(id);
     await refreshActiveTasks();
   }
@@ -121,6 +125,8 @@ class TaskService {
         completedAt: DateTime.now().millisecondsSinceEpoch,
         synced: false,
       );
+      // Cancel reminders when task is completed
+      await TaskReminderService.instance.cancelRemindersForTask(updated.id);
     } else if (updated.status == TaskStatus.pending) {
       updated = updated.copyWith(
         status: TaskStatus.inProgress,
@@ -130,6 +136,11 @@ class TaskService {
 
     await DatabaseService.instance.updateTask(updated);
     await refreshActiveTasks();
+    
+    // Reschedule reminders if task due date exists and task is not done
+    if (updated.dueAt != null && updated.status != TaskStatus.done) {
+      unawaited(TaskReminderService.instance.scheduleRemindersForTask(updated));
+    }
 
     return TaskProgressResult(task: updated, justCompleted: justCompleted);
   }
@@ -143,6 +154,8 @@ class TaskService {
     );
     await DatabaseService.instance.updateTask(updated);
     await refreshActiveTasks();
+    // Cancel reminders when task is manually completed
+    await TaskReminderService.instance.cancelRemindersForTask(updated.id);
     return updated;
   }
 

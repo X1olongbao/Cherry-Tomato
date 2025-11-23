@@ -7,6 +7,8 @@ import '../services/database_service.dart';
 import '../services/sync_service.dart';
 import '../services/profile_service.dart';
 import '../services/task_service.dart';
+import '../services/system_notification_service.dart';
+import '../services/task_reminder_service.dart';
 import 'constants.dart';
 import 'logger.dart';
 
@@ -18,9 +20,9 @@ Future<void> initializeBackend() async {
   // Initialize Firebase (for OTP and Google Sign-In)
   try {
     await Firebase.initializeApp();
-    Logger.i('✅ Firebase initialized');
+    Logger.i('Firebase initialized');
   } catch (e) {
-    Logger.e('❌ Firebase init failed: $e');
+    Logger.e('Firebase initialization failed: $e');
   }
 
   // Initialize Supabase client
@@ -30,37 +32,48 @@ Future<void> initializeBackend() async {
       anonKey: Constants.supabaseAnonKey,
       authFlowType: AuthFlowType.pkce,
     );
-    Logger.i('✅ Supabase initialized');
     // Load profile for current user (if any)
     await ProfileService.instance.refreshCurrentUserProfile();
+    Logger.i('Supabase initialized');
   } catch (e) {
-    // Gracefully handle initialization errors (invalid key, network issues)
-    Logger.e('❌ Supabase client init failed: $e');
+    Logger.e('Supabase initialization failed: $e');
   }
 
   // Initialize local database
   await DatabaseService.instance.init();
-  Logger.i('SQLite database initialized');
+
+  // Initialize notification service
+  await SystemNotificationService.instance.init();
+
+  // Start task reminder service
+  TaskReminderService.instance.start();
+
+  // Schedule daily general reminder
+  await SystemNotificationService.instance.scheduleDailyReminder();
 
   // Start connectivity-based sync service
   SyncService.instance.start();
-  Logger.i('Sync service started');
+  Logger.i('Backend services started');
 
   // Optionally listen to auth changes to trigger sync after login/logout
   AuthService.instance.authStateChanges.listen((user) async {
     if (user != null) {
-      Logger.i('Auth state changed: user logged in, starting sync');
       SyncService.instance.syncUnsyncedSessionsForCurrentUser();
       // Refresh profile display name when user logs in
       ProfileService.instance.refreshCurrentUserProfile();
       // Refresh tasks to show only current user's tasks
       await TaskService.instance.refreshActiveTasks();
+      // Reschedule task reminders for logged in user
+      TaskReminderService.instance.start();
+      Logger.i('Auth state: user logged in');
     } else {
-      Logger.i('Auth state changed: user logged out');
       // Clear profile display name when user logs out
       ProfileService.instance.displayName.value = null;
       // Clear tasks when user logs out
       TaskService.instance.activeTasks.value = [];
+      // Stop task reminder service
+      TaskReminderService.instance.stop();
+      Logger.i('Auth state: user logged out');
     }
   });
 }

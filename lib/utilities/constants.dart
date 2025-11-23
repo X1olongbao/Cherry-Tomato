@@ -7,6 +7,8 @@ class Constants {
   // Supabase tables
   static const String remoteSessionTable = 'pomodoro_sessions';
   static const String remoteTasksTable = 'tasks';
+  static const String remoteTaskRemindersTable = 'task_reminders';
+  
 
   // Backend endpoints for Supabase Admin actions (Edge Functions or secure backend)
   // Set these to your deployed function URLs.

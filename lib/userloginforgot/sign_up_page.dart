@@ -48,6 +48,15 @@ class _SignUpPageState extends State<SignUpPage> {
 
       // Use Supabase's built-in OTP functionality
       final supabase = Supabase.instance.client;
+      final exists = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+      if (exists != null) {
+        setState(() => _error = 'Email already in use. Please log in or use a different email.');
+        return;
+      }
       await supabase.auth.signInWithOtp(
         email: email,
         shouldCreateUser: true,
@@ -72,9 +81,6 @@ class _SignUpPageState extends State<SignUpPage> {
       );
     } catch (e) {
       setState(() => _error = e.toString());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send OTP: ${e.toString()}')),
-      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }

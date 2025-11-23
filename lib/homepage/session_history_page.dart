@@ -63,9 +63,6 @@ class _SessionHistoryPageState extends State<SessionHistoryPage> {
     final finishedSessions = _sessions.where((s) => s.taskCompleted).toList();
     
     if (finishedSessions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No finished tasks to delete')),
-      );
       return;
     }
 
@@ -100,25 +97,11 @@ class _SessionHistoryPageState extends State<SessionHistoryPage> {
         await DatabaseService.instance.deleteFinishedTaskSessions(userId: user?.id);
         
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Deleted ${finishedSessions.length} finished task session(s) successfully'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
         
         // Refresh to ensure UI is updated
         await _load();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to delete finished tasks: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
         setState(() => _loading = false);
       }
     }

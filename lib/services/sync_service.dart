@@ -9,6 +9,7 @@ import '../models/task.dart';
 import 'task_service.dart';
 import 'api_service.dart';
 import 'database_service.dart';
+import 'task_reminder_service.dart';
 import '../utilities/logger.dart';
 
 /// Listens to connectivity changes and syncs unsynced sessions when online.
@@ -26,10 +27,9 @@ class SyncService {
     _sub ??= _connectivity.onConnectivityChanged.listen((result) async {
       if (result == ConnectivityResult.mobile ||
           result == ConnectivityResult.wifi) {
-        Logger.i('🌐 Internet connected');
         await syncUnsyncedSessionsForCurrentUser();
       } else {
-        Logger.i('📱 Internet disconnected');
+        Logger.w('Connectivity offline: $result');
       }
     });
 
@@ -43,64 +43,24 @@ class SyncService {
   }
 
   /// Manual sync function that can be called anytime to push unsynced sessions.
-  /// Shows SnackBar notifications for user feedback.
   /// Only runs if the user is logged in.
   Future<void> manualSync(BuildContext context) async {
     final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
     if (supabaseUserId == null || supabaseUserId.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Please log in to sync sessions'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
       return;
     }
-
-    // Show syncing message
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Syncing sessions...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-
-    Logger.i('🔄 Manual sync initiated');
+    Logger.i('Manual sync started for $supabaseUserId');
     
     try {
       await syncUnsyncedSessionsForCurrentUser();
       
-      // Show success message
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sync complete!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      Logger.e('❌ Manual sync failed: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Sync failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    } catch (e) {}
   }
 
   /// Try to sync unsynced sessions for the currently authenticated user.
   /// Includes comprehensive logging and session count debugging.
   Future<void> syncUnsyncedSessionsForCurrentUser() async {
     if (_isSyncing) {
-      Logger.i('🔄 Sync already in progress, skipping');
       return;
     }
     _isSyncing = true;
@@ -109,11 +69,10 @@ class SyncService {
       // Use exact Supabase user UUID as required
       final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
       if (supabaseUserId == null || supabaseUserId.isEmpty) {
-        Logger.w('⚠️ Sync skipped: no authenticated user');
         return;
       }
 
-      Logger.i('🔁 Starting sync...');
+      Logger.i('Sync started for user $supabaseUserId');
 
       // Attach user to any local anonymous tasks/sessions
       await DatabaseService.instance.attachUserToUnsyncedTasks(supabaseUserId);
@@ -122,15 +81,15 @@ class SyncService {
       // First sync tasks so FK constraints succeed
       final unsyncedTasks =
           await DatabaseService.instance.getUnsyncedTasks(supabaseUserId);
-      Logger.i('🧾 Unsynced tasks: ${unsyncedTasks.length}');
+      Logger.i('Unsynced tasks: ${unsyncedTasks.length}');
       for (final task in unsyncedTasks) {
-        Logger.i('📤 Uploading task ${task.id}');
+        Logger.i('Uploading task ${task.id}');
         final uploaded = await _uploadTaskWithRetry(task);
         if (uploaded) {
           await DatabaseService.instance.markTaskSynced(task.id);
-          Logger.i('✅ Task ${task.id} uploaded');
+          Logger.i('Task ${task.id} marked as synced');
         } else {
-          Logger.w('⚠️ Task ${task.id} not uploaded — will keep as unsynced');
+          Logger.w('Task ${task.id} upload failed');
         }
       }
 
@@ -140,33 +99,29 @@ class SyncService {
       
       // Debug: Show session counts
       final allLocalSessions = await DatabaseService.instance.getSessions(userId: supabaseUserId);
-      Logger.i('📊 SQLite unsynced sessions: ${unsynced.length}');
-      Logger.i('📦 Found ${unsynced.length} unsynced sessions');
-      Logger.i('📊 SQLite total sessions: ${allLocalSessions.length}');
-      
+      Logger.i('Unsynced sessions: ${unsynced.length}, total local: ${allLocalSessions.length}');
       if (unsynced.isNotEmpty) {
-        Logger.i('📤 Uploading ${unsynced.length} session(s) to Supabase');
+        Logger.i('Uploading ${unsynced.length} sessions');
         for (final session in unsynced) {
-          Logger.i('📤 Uploading session ${session.id}');
+          Logger.i('Uploading session ${session.id}');
           final uploaded = await _uploadSingleWithRetry(session);
           if (uploaded) {
             await DatabaseService.instance.markSessionSynced(session.id);
-            Logger.i('✅ Session ${session.id} uploaded');
+            Logger.i('Session ${session.id} marked as synced');
           } else {
-            Logger.w(
-                '⚠️ Session ${session.id} not uploaded — will keep as unsynced');
+            Logger.w('Session ${session.id} upload failed');
           }
         }
-        Logger.i('🎉 Session sync complete');
+        Logger.i('Session upload batch complete');
       } else {
-        Logger.i('✅ No unsynced sessions found');
+        Logger.i('No unsynced sessions');
       }
 
       // After syncing, reconcile local with remote to remove entries deleted on server
       await _reconcileTasksWithRemote(supabaseUserId);
       await _reconcileLocalWithRemote(supabaseUserId);
     } catch (e) {
-      Logger.e('❌ Sync error: $e');
+      Logger.e('Sync failed: $e');
     } finally {
       _isSyncing = false;
     }
@@ -182,18 +137,15 @@ class SyncService {
       try {
         final ok = await ApiService.instance.uploadTask(task);
         if (ok) return true;
-        Logger.w('❌ Sync failed for task ${task.id}: API returned false');
       } catch (e) {
-        Logger.w('❌ Upload attempt ${attempt + 1}/$maxRetries failed for task ${task.id}: $e');
+        Logger.w('Task upload attempt ${attempt + 1} failed: $e');
       }
       attempt++;
       if (attempt < maxRetries) {
         final delay = Duration(seconds: 1 << (attempt - 1));
-        Logger.i('⏳ Retrying task ${task.id} in ${delay.inSeconds} seconds...');
         await Future.delayed(delay);
       }
     }
-    Logger.e('❌ All retry attempts failed for task ${task.id}. Will retry later.');
     return false;
   }
 
@@ -205,19 +157,15 @@ class SyncService {
       try {
         final ok = await ApiService.instance.uploadSession(session);
         if (ok) return true;
-        Logger.w('❌ Sync failed for session ${session.id}: API returned false');
       } catch (e) {
-        Logger.w('❌ Upload attempt ${attempt + 1}/$maxRetries failed: $e');
-        Logger.w('❌ Sync failed for session ${session.id}: $e');
+        Logger.w('Session upload attempt ${attempt + 1} failed: $e');
       }
       attempt++;
       if (attempt < maxRetries) {
         final delay = Duration(seconds: 1 << (attempt - 1)); // 1,2 seconds
-        Logger.i('⏳ Retrying in ${delay.inSeconds} seconds...');
         await Future.delayed(delay);
       }
     }
-    Logger.e('❌ All retry attempts failed for ${session.id}. Will retry on next internet connection.');
     return false;
   }
 
@@ -225,7 +173,6 @@ class SyncService {
   /// If a local session (synced == true) is missing remotely, delete it locally.
   Future<void> _reconcileLocalWithRemote(String userId) async {
     try {
-      Logger.i('🧮 Reconciling local with remote for user $userId');
       final remote = await ApiService.instance.fetchSessionsForUser(userId);
       final remoteSigs = remote
           .map((s) => '${s.taskId ?? ''}|${s.duration}|${s.completedAt}')
@@ -235,17 +182,13 @@ class SyncService {
           .map((s) => '${s.taskId ?? ''}|${s.duration}|${s.completedAt}')
           .toSet();
 
-      int removed = 0;
       for (final s in local) {
         final sig = '${s.taskId ?? ''}|${s.duration}|${s.completedAt}';
         if (s.synced && !remoteSigs.contains(sig)) {
           await DatabaseService.instance.deleteSession(s.id);
-          removed++;
-          Logger.i('🗑️ Removed local session ${s.id} (not present remotely)');
         }
       }
 
-      int added = 0;
       for (final r in remote) {
         final sig = '${r.taskId ?? ''}|${r.duration}|${r.completedAt}';
         if (!localSigs.contains(sig)) {
@@ -257,36 +200,29 @@ class SyncService {
               synced: true,
             ),
           );
-          added++;
-          Logger.i('📥 Cached remote session locally (sig=$sig)');
         }
       }
-      Logger.i('🧹 Reconciliation complete. Removed $removed, added $added.');
     } catch (e) {
-      Logger.w('⚠️ Reconciliation skipped due to error: $e');
+      Logger.w('Reconcile local with remote failed: $e');
     }
   }
   
   Future<void> _reconcileTasksWithRemote(String userId) async {
     try {
-      Logger.i('🧮 Reconciling tasks for user $userId');
       final remoteTasks = await ApiService.instance.fetchTasksForUser(userId);
       final localTasks = await DatabaseService.instance.getTasks(userId: userId);
       final localIds = localTasks.map((t) => t.id).toSet();
 
-      int added = 0;
       for (final task in remoteTasks) {
         if (!localIds.contains(task.id)) {
-          await DatabaseService.instance.insertTask(task.copyWith(synced: true));
-          added++;
+          final insertedTask = await DatabaseService.instance.insertTask(task.copyWith(synced: true));
+          // Schedule reminders for newly synced tasks
+          unawaited(TaskReminderService.instance.scheduleRemindersForTask(insertedTask));
         }
       }
-      Logger.i('🧹 Task reconciliation complete. Added $added remote tasks.');
-      if (added > 0) {
-        unawaited(TaskService.instance.refreshActiveTasks());
-      }
+      unawaited(TaskService.instance.refreshActiveTasks());
     } catch (e) {
-      Logger.w('⚠️ Task reconciliation skipped due to error: $e');
+      Logger.w('Reconcile tasks with remote failed: $e');
     }
   }
 }

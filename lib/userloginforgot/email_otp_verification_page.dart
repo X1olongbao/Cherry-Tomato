@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../homepage/homepage_app.dart';
 import 'set_new_pass.dart';
 import '../services/profile_service.dart';
+import '../utilities/logger.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -35,6 +36,7 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
   final _otpCtrl = TextEditingController();
   bool _verifying = false;
   bool _resending = false;
+  String? _error;
 
   @override
   void initState() {
@@ -70,7 +72,7 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
             return tomatoRed.withValues(alpha: 0.2);
-          }
+  }
           return tomatoRed;
         }),
       );
@@ -92,23 +94,9 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
               }
             : null,
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('OTP resent. Please check your email.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Resend failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      setState(() => _error = 'Failed to resend code. Please try again.');
     } finally {
       if (mounted) setState(() => _resending = false);
     }
@@ -118,7 +106,10 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
     if (_verifying || !_isValidOtp) return;
     
     final input = _otpCtrl.text.trim();
-    setState(() => _verifying = true);
+    setState(() {
+      _verifying = true;
+      _error = null;
+    });
     
     try {
       final supabase = Supabase.instance.client;
@@ -146,21 +137,19 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
             await supabase.auth.updateUser(UserAttributes(password: password));
           }
         } catch (e) {
-          // If password update fails, continue anyway - user can set it later
-          print('Warning: Failed to set password: $e');
+          Logger.w('Failed to set password: $e');
         }
 
         // Insert/update profile with username
         try {
-          await supabase.from('profiles').upsert({
+        await supabase.from('profiles').upsert({
             'id': userId,
-            'email': email,
-            'username': username,
-            'is_verified': true,
+          'email': email,
+          'username': username,
+          'is_verified': true,
           });
         } catch (e) {
-          // If profile creation fails, log but continue
-          print('Warning: Failed to create profile: $e');
+          Logger.w('Failed to create profile: $e');
           // Try to update user metadata with username as fallback
           try {
             await supabase.auth.updateUser(
@@ -175,7 +164,7 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
         try {
           await ProfileService.instance.refreshCurrentUserProfile();
         } catch (e) {
-          print('Warning: Failed to refresh profile: $e');
+          Logger.w('Failed to refresh profile: $e');
         }
 
         if (!mounted) return;
@@ -198,22 +187,13 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
         );
       }
     } catch (e) {
-      final errorMsg = e.toString().toLowerCase();
-      String message;
-      if (errorMsg.contains('invalid') || errorMsg.contains('expired')) {
-        message = 'Invalid or expired OTP. Please try again or resend.';
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('invalid') || msg.contains('expired')) {
+        setState(() => _error = 'Invalid or expired OTP. Please try again or resend.');
       } else {
-        message = 'Verification failed: $e';
+        setState(() => _error = 'Verification failed. Please try again.');
       }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      Logger.e('Verification failed: $e');
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
@@ -245,9 +225,9 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
+        child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          children: [
               const SizedBox(height: 32),
               // Header text
               Text(
@@ -277,10 +257,10 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
                   style: TextStyle(fontSize: 16, color: Colors.black),
                 ),
               ),
-              TextField(
-                controller: _otpCtrl,
+            TextField(
+              controller: _otpCtrl,
                 keyboardType: TextInputType.number,
-                maxLength: 6,
+              maxLength: 6,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 24,
@@ -299,6 +279,21 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
                 ),
                 onChanged: (_) => setState(() {}),
               ),
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: tomatoRed),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: tomatoRed),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 32),
               
               // Verify Button
@@ -323,9 +318,9 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                ),
               ),
-              const SizedBox(height: 24),
+            ),
+            const SizedBox(height: 24),
               
               // Resend OTP
               Center(
@@ -339,14 +334,14 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
                         color: Colors.grey[600],
                       ),
                     ),
-                    TextButton(
-                      onPressed: _resending ? null : _resendOtp,
+            TextButton(
+              onPressed: _resending ? null : _resendOtp,
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: _resending
+              child: _resending
                           ? const SizedBox(
                               height: 16,
                               width: 16,
@@ -360,8 +355,8 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
                                 color: tomatoRed,
                               ),
                             ),
-                    ),
-                  ],
+            ),
+          ],
                 ),
               ),
               const SizedBox(height: 40),

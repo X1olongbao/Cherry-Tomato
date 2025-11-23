@@ -16,9 +16,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  bool notificationsEnabled = true;
-  bool appBlockerEnabled = false;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -142,31 +139,6 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 8),
               _buildListTile(Icons.lock_outline, "Privacy"),
 
-              const SizedBox(height: 32),
-
-              // Settings Section
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Setting and Activity",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[800],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSwitchTile(Icons.notifications_none, "Notification",
-                  notificationsEnabled, (val) {
-                setState(() => notificationsEnabled = val);
-              }),
-              const SizedBox(height: 8),
-              _buildSwitchTile(Icons.block, "App Blocker", appBlockerEnabled,
-                  (val) {
-                setState(() => appBlockerEnabled = val);
-              }),
-
               const SizedBox(height: 40), // ✅ extra space before logout
 
               // Logout Button
@@ -177,7 +149,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   onPressed: () async {
                     // Capture Navigator and Messenger before the async gap
                     final navigator = Navigator.of(context);
-                    final messenger = ScaffoldMessenger.of(context);
                     try {
                       await AuthService.instance.signOut();
                       if (!mounted) return;
@@ -187,9 +158,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       );
                     } catch (e) {
                       if (!mounted) return;
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Logout failed: $e')),
-                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -258,38 +226,6 @@ class _ProfilePageState extends State<ProfilePage> {
             );
           }
         },
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile(
-      IconData icon, String title, bool value, Function(bool) onChanged) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: Offset(0, 3),
-          )
-        ],
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.black),
-        title: Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
-          ),
-        ),
-        trailing: Switch(
-          value: value,
-          onChanged: onChanged,
-          activeThumbColor: tomatoRed,
-        ),
       ),
     );
   }

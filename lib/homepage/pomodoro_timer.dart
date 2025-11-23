@@ -5,11 +5,12 @@ import 'package:flutter/cupertino.dart';
 import '../models/task.dart';
 import '../models/session_type.dart';
 import 'package:tomatonator/services/session_service.dart';
-import 'package:tomatonator/utilities/logger.dart';
+import 'package:tomatonator/services/system_notification_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tomatonator/utilities/logger.dart';
 
 /// Pomodoro / Short Break / Long Break single-page UI (UI-only logic)
 /// Uses an in-memory timer (no persistence) and draws a circular progress
@@ -32,8 +33,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     SessionType.longBreak: const Duration(minutes: 15),
   };
   PresetMode _presetMode = PresetMode.classic;
-  // Focus check interval (15s for testing)
-  static const Duration _focusCheckInterval = Duration(seconds: 15);
+  // Focus check interval: every 7 minutes
+  static const Duration _focusCheckInterval = Duration(minutes: 7);
 
   Timer? _ticker;
   Duration _remaining = const Duration(minutes: 25);
@@ -118,8 +119,19 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     _scheduleFocusCheck();
     if (_current == SessionType.pomodoro) {
       unawaited(_startAppBlockerIfConfigured());
+      // Notify Pomodoro start
+      unawaited(SystemNotificationService.instance.notifyPomodoroStart(
+        taskName: widget.task?.title,
+      ));
     } else {
       unawaited(_stopAppBlocker());
+      // Notify break start
+      final breakType = _current == SessionType.shortBreak ? 'Short' : 'Long';
+      final durationMinutes = _durations[_current]!.inMinutes;
+      unawaited(SystemNotificationService.instance.notifyBreakStart(
+        breakType: breakType,
+        durationMinutes: durationMinutes,
+      ));
     }
     _ticker = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
@@ -196,25 +208,19 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
           task: widget.task,
           presetMode: _presetMode.name,
         );
-        if (mounted) {
-          final label = switch (_current) {
-            SessionType.pomodoro => 'Pomodoro',
-            SessionType.shortBreak => 'Short break',
-            SessionType.longBreak => 'Long break',
-          };
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$label completed and saved')),
-          );
-        }
+        if (mounted) {}
       } catch (e) {
         Logger.e('Failed to record session: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to save session: $e')),
-          );
-        }
+        if (mounted) {}
       }
     }
+    // Notify session end
+    if (_current == SessionType.pomodoro) {
+      unawaited(SystemNotificationService.instance.notifyPomodoroEnd(
+        taskName: widget.task?.title,
+      ));
+    }
+    
     // Advance flow according to requirements
     if (_current == SessionType.pomodoro) {
       // After Pomodoro: play 5-second alarm and automatically start break
@@ -250,23 +256,10 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         task: widget.task,
         presetMode: _presetMode.name,
       );
-      if (mounted) {
-        final label = switch (typeBefore) {
-          SessionType.pomodoro => 'Pomodoro',
-          SessionType.shortBreak => 'Short break',
-          SessionType.longBreak => 'Long break',
-        };
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$label skipped and saved')),
-        );
-      }
+      if (mounted) {}
     } catch (e) {
       Logger.e('Failed to record skipped session: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save session: $e')),
-        );
-      }
+      if (mounted) {}
     }
 
     // Advance with feature behavior
@@ -557,7 +550,6 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                     final s = int.tryParse(shortCtrl.text);
                     final l = int.tryParse(longCtrl.text);
                     if (p == null || p <= 0 || s == null || s <= 0 || l == null || l <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter valid minutes (> 0).')));
                       return;
                     }
                     setState(() {
@@ -597,56 +589,93 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       await _stopAlarm();
       return;
     }
-    // Rounded-corner dialog matching app style
+    int remainingSeconds = 15;
+    Timer? autoCloseTimer;
+    // Rounded-corner dialog matching app style with auto-dismiss in 15s
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.timer, color: Colors.black87),
-              const SizedBox(width: 8),
-              Text('Focus Check', style: const TextStyle(fontWeight: FontWeight.w600)),
-            ],
-          ),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                await _stopAlarm();
-                // End the session and return to homepage
-                _stopTimer();
-                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                if (mounted) {
-                  // Go back to Homepage with motivational payload (to show popup)
-                  final payload = {
-                    'motivational': true,
-                    'message': "That's okay! Let's reset and come back strong.",
-                  };
-                  Navigator.of(context).pop(payload);
-                }
-              },
-              child: const Text('No'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            autoCloseTimer ??= Timer.periodic(const Duration(seconds: 1), (t) async {
+              remainingSeconds--;
+              setState(() {});
+              if (remainingSeconds <= 0) {
+                t.cancel();
+                autoCloseTimer = null;
                 await _stopAlarm();
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _accent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              }
+            });
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.timer, color: Colors.black87),
+                  const SizedBox(width: 8),
+                  Text('Focus Check', style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
               ),
-              child: const Text('Yes'),
-            ),
-          ],
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(message),
+                  const SizedBox(height: 8),
+                  Text('Auto closes in ${_formatHms(remainingSeconds)}',
+                      style: const TextStyle(color: Colors.black54)),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    autoCloseTimer?.cancel();
+                    autoCloseTimer = null;
+                    await _stopAlarm();
+                    // End the session and return to homepage
+                    _stopTimer();
+                    if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                    if (mounted) {
+                      final payload = {
+                        'motivational': true,
+                        'message': "That's okay! Let's reset and come back strong.",
+                      };
+                      Navigator.of(context).pop(payload);
+                    }
+                  },
+                  child: const Text('No'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    autoCloseTimer?.cancel();
+                    autoCloseTimer = null;
+                    await _stopAlarm();
+                    if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Yes'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
     _isDialogShowing = false;
+  }
+
+  String _formatHms(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    final s = seconds % 60;
+    if (h > 0) return '${h}h ${m}m ${s}s';
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
   }
 
   Future<void> _handleCycleCompletion() async {
@@ -1116,8 +1145,10 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         Logger.i('App blocker: Permissions not granted, skipping');
         return;
       }
-      // Fixed dismiss duration: 30 seconds
-      const dismissDurationSeconds = 30;
+      // Set dismiss duration to the remaining Pomodoro time (in seconds)
+      final dismissDurationSeconds = _current == SessionType.pomodoro
+          ? _remaining.inSeconds
+          : 30;
       Logger.i('App blocker: Starting service with packages: $pkgs');
       final result = await _blockerChannel.invokeMethod('startAppBlocker', {
         'packages': pkgs,
@@ -1154,22 +1185,12 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       }
       if (!mounted) return false;
       
-      final messenger = ScaffoldMessenger.of(context);
+      
       if (!usageGranted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Usage Access permission is required. Opening settings...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        
       }
       if (!overlayGranted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('"Draw over other apps" permission is required. Opening settings...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        
       }
       
       final proceed = await showDialog<bool>(
@@ -1191,7 +1212,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                 ],
               );
             },
-          ) ??
+      ) ??
           false;
       if (!proceed) {
         Logger.i('App blocker: User cancelled permission request');
@@ -1214,21 +1235,10 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       Logger.i('App blocker: After settings - Usage = $usageGrantedAfter, Overlay = $overlayGrantedAfter');
       
       if (usageGrantedAfter && overlayGrantedAfter) {
-        if (mounted) {
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Permissions granted! App blocker is now active.')),
-          );
-        }
+        if (mounted) {}
         return true;
       } else {
-        if (mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Please grant all permissions and try again.'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
+        if (mounted) {}
         return false;
       }
     } catch (e) {

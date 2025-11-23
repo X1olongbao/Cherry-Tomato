@@ -75,9 +75,10 @@ class MainActivity : FlutterActivity() {
                 "startAppBlocker" -> {
                     try {
                         val pkgs = (call.argument<List<String>>("packages") ?: emptyList())
+                        val dismissSecs = call.argument<Int>("dismissDurationSeconds") ?: AppBlockerService.DISMISS_DURATION
                         val intent = Intent(this, AppBlockerService::class.java)
                         intent.putStringArrayListExtra(AppBlockerService.EXTRA_BLOCKED_PACKAGES, ArrayList(pkgs))
-                        // Dismiss duration is fixed at 30 seconds in AppBlockerService
+                        intent.putExtra(AppBlockerService.EXTRA_DISMISS_DURATION, dismissSecs)
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             ContextCompat.startForegroundService(this, intent)
                         } else {

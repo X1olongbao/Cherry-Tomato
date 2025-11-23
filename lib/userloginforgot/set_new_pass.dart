@@ -21,6 +21,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
   bool _show1 = false;
   bool _show2 = false;
   bool _submitted = false;
+  String? _error;
 
   @override
   void initState() {
@@ -62,19 +63,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
       );
     } catch (e) {
       Logger.e('Password update failed: $e');
-      final errorMsg = e.toString().toLowerCase();
-      String message = 'Failed to update password';
-      if (errorMsg.contains('401') || errorMsg.contains('session')) {
-        message = 'Session expired. Please verify OTP again.';
-      } else if (errorMsg.contains('network')) {
-        message = 'Network error. Please check your connection.';
-      } else {
-        message = 'Failed to update password: $e';
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      setState(() => _error = 'Failed to update password. Please try again.');
     }
   }
 
@@ -222,6 +211,21 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: tomatoRed),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: tomatoRed),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

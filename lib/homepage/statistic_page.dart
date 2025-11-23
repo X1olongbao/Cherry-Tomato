@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
+import '../models/pomodoro_session.dart';
 import '../services/database_service.dart';
 import '../services/auth_service.dart';
+import '../services/session_service.dart';
 import 'package:tomatonator/services/app_usage_service.dart';
 
 const tomatoRed = Color(0xFFE53935);
@@ -104,14 +106,22 @@ class StatisticPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              FutureBuilder<List<Task>>(
-                future: DatabaseService.instance.getTasks(
-                  userId: AuthService.instance.currentUser?.id,
-                ),
+              FutureBuilder<List<dynamic>>(
+                future: Future.wait([
+                  DatabaseService.instance.getTasks(
+                    userId: AuthService.instance.currentUser?.id,
+                  ),
+                  SessionService.instance.mergedSessionsForCurrentUser(),
+                ]),
                 builder: (context, snapshot) {
-                  final list = snapshot.data ?? const <Task>[];
-                  final pending = list.where((t) => t.isDone != true).length;
-                  final completed = list.where((t) => t.isDone == true).length;
+                  final tasks = snapshot.data != null && snapshot.data!.isNotEmpty
+                      ? (snapshot.data![0] as List<Task>)
+                      : const <Task>[];
+                  final finished = snapshot.data != null && snapshot.data!.length > 1
+                      ? (snapshot.data![1] as List<PomodoroSession>)
+                      : const <PomodoroSession>[];
+                  final pending = tasks.where((t) => t.isDone != true).length;
+                  final completed = finished.length;
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [

@@ -32,6 +32,10 @@ dependencies:
   
   # Image picker for profile pictures
   image_picker: ^1.0.7
+  
+  # Local notifications
+  flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4
 
 
   cupertino_icons: ^1.0.2

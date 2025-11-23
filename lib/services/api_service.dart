@@ -28,21 +28,12 @@ class ApiService {
         m['synced'] = true;
         return m;
       }).toList();
-
-      // Debug payload types for the first record to catch type mismatches
-      final sample = payload.first;
-      Logger.i(
-          '🧪 Payload sample types: id=${sample['id']?.runtimeType}, user_id=${sample['user_id']?.runtimeType}, duration=${sample['duration']?.runtimeType}, completed_at=${sample['completed_at']?.runtimeType}, synced=${sample['synced']?.runtimeType}');
-
-      // Determine userId for logging and verification
+      
       final userId = sessions.first.userId;
       if (userId == null || userId.isEmpty) {
         throw const RemoteFailure(message: 'Missing user_id on sessions payload');
       }
-
-      // Before count (debug)
-      final before = await fetchSessionsForUser(userId);
-      Logger.i('📡 Remote before upload count for user $userId: ${before.length}');
+      Logger.i('Uploading ${payload.length} sessions for user $userId');
 
       // Insert rows and select inserted values for verification
       final inserted = await _client
@@ -51,23 +42,17 @@ class ApiService {
           .select();
 
       final insertedCount = (inserted is List) ? inserted.length : 0;
-      Logger.i('📤 Supabase upsert affected rows: $insertedCount');
-
-      // After count (debug)
-      final after = await fetchSessionsForUser(userId);
-      Logger.i('📡 Remote after upload count for user $userId: ${after.length}');
 
       // Consider upload successful if at least one row was affected
       return insertedCount > 0;
     } on PostgrestException catch (e) {
-      // Server-side failure
-      Logger.e('❌ Supabase PostgrestException: ${e.message}');
+      Logger.e('Upload sessions failed: ${e.message}');
       throw RemoteFailure(message: e.message);
     } on SocketException {
-      Logger.e('❌ Network connection error during upload');
+      Logger.e('Upload sessions failed: network connection error');
       throw const RemoteFailure(message: 'Network connection error');
     } catch (e) {
-      Logger.e('❌ Unknown upload error: $e');
+      Logger.e('Upload sessions failed: $e');
       throw RemoteFailure(message: e.toString());
     }
   }
@@ -120,26 +105,22 @@ class ApiService {
       m.remove('id');
       m['synced'] = true;
 
-      Logger.i(
-          '🧪 Single payload types: user_id=${m['user_id']?.runtimeType}, duration=${m['duration']?.runtimeType}, completed_at=${m['completed_at']?.runtimeType}, synced=${m['synced']?.runtimeType}');
+      Logger.i('Uploading single session for user ${m['user_id']}');
 
       final inserted = await _client
           .from(Constants.remoteSessionTable)
           .insert(m)
           .select();
 
-      final ok = inserted is List && inserted.isNotEmpty;
-      final affected = inserted is List ? inserted.length : 0;
-      Logger.i('📤 Insert for session ${session.id} affected rows: $affected');
-      return ok;
+      return inserted is List && inserted.isNotEmpty;
     } on PostgrestException catch (e) {
-      Logger.e('❌ Supabase PostgrestException: ${e.message}');
+      Logger.e('Upload single session failed: ${e.message}');
       throw RemoteFailure(message: e.message);
     } on SocketException {
-      Logger.e('❌ Network connection error during upload');
+      Logger.e('Upload single session failed: network connection error');
       throw const RemoteFailure(message: 'Network connection error');
     } catch (e) {
-      Logger.e('❌ Unknown upload error: $e');
+      Logger.e('Upload single session failed: $e');
       throw RemoteFailure(message: e.toString());
     }
   }
@@ -153,7 +134,7 @@ class ApiService {
           .select();
       return inserted is List && inserted.isNotEmpty;
     } on PostgrestException catch (e) {
-      Logger.e('❌ Upload task failed: ${e.message}');
+      Logger.e('Upload task failed: ${e.message}');
       throw RemoteFailure(message: e.message);
     } on SocketException {
       throw const RemoteFailure(message: 'Network connection error');

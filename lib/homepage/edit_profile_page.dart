@@ -51,11 +51,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load profile: $e')),
-        );
-      }
+      
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -77,12 +73,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           _selectedImage = File(image.path);
         });
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to pick image: $e')),
-      );
-    }
+    } catch (e) {}
   }
 
   Future<String?> _uploadImage(File imageFile, String userId) async {
@@ -172,25 +163,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
       await ProfileService.instance.refreshCurrentUserProfile();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile updated successfully'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
 
       if (!mounted) return;
       Navigator.of(context).pop(true); // Return true to indicate success
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update profile: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
