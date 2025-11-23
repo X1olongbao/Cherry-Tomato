@@ -24,12 +24,19 @@ class SystemNotificationService {
     try {
       final offset = DateTime.now().timeZoneOffset;
       final hours = offset.inHours;
-      final sign = hours >= 0 ? '-' : '+'; // Etc/GMT sign is inverted
-      final name = 'Etc/GMT$sign${hours.abs()}';
+      String name;
+      if (hours == 8) {
+        name = 'Asia/Shanghai';
+      } else if (hours == 0) {
+        name = 'Etc/UTC';
+      } else {
+        final sign = hours >= 0 ? '-' : '+'; // Etc/GMT sign is inverted
+        name = 'Etc/GMT$sign${hours.abs()}';
+      }
       tz.setLocalLocation(tz.getLocation(name));
       Logger.i('Timezone set to $name');
     } catch (e) {
-      Logger.w('Failed to set local timezone by offset: $e');
+      Logger.w('Failed to set local timezone: $e');
       try {
         tz.setLocalLocation(tz.getLocation('Etc/UTC'));
         Logger.i('Timezone fallback to Etc/UTC');
