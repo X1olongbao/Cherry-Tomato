@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/userloginforgot/login_page.dart';
 import 'package:tomatonator/homepage/privacy_security_page.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:tomatonator/homepage/edit_profile_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tomatonator/services/profile_service.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -16,6 +19,47 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  String? _avatarUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvatar();
+    ProfileService.instance.displayName.addListener(_onProfileNameChanged);
+    // Ensure latest name is fetched for current user
+    ProfileService.instance.refreshCurrentUserProfile();
+  }
+
+  void _onProfileNameChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadAvatar() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null || userId.isEmpty) {
+        if (mounted) setState(() => _avatarUrl = null);
+        return;
+      }
+      final row = await Supabase.instance.client
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', userId)
+          .maybeSingle();
+      String? url;
+      if (row is Map && row['avatar_url'] is String) {
+        final s = (row['avatar_url'] as String).trim();
+        if (s.isNotEmpty) url = s;
+      }
+      if (mounted) setState(() => _avatarUrl = url);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    ProfileService.instance.displayName.removeListener(_onProfileNameChanged);
+    super.dispose();
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -52,11 +96,13 @@ class _ProfilePageState extends State<ProfilePage> {
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 50,
                     backgroundColor: Colors.black12,
-                    backgroundImage:
-                        AssetImage('assets/profile/profile_pic.png'),
+                    backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                        ? NetworkImage(_avatarUrl!)
+                        : const AssetImage('assets/profile/profile_pic.png')
+                            as ImageProvider,
                   ),
                   Positioned(
                     bottom: 4,
@@ -80,14 +126,8 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 12),
               Builder(builder: (context) {
                 final user = AuthService.instance.currentUser;
-                final username = user?.username;
-                // Fallback to email local-part if username missing
-                final emailLocal = user?.email?.split('@').first;
-                final displayName = (username != null && username.isNotEmpty)
-                    ? username
-                    : (emailLocal != null && emailLocal.isNotEmpty)
-                        ? emailLocal
-                        : 'Cherry';
+                final displayName = ProfileService.instance.displayName.value ??
+                    (user?.email?.split('@').first ?? 'Cherry');
                 final displayEmail = user?.email ?? 'Not logged in';
                 return Column(
                   children: [
@@ -125,14 +165,29 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
               const SizedBox(height: 12),
-              _buildListTile(Icons.person_outline, "Edit Profile", onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const EditProfilePage(),
-                  ),
-                ).then((updated) {
+              _buildListTile(Icons.person_outline, "Edit Profile", onTap: () async {
+                final user = AuthService.instance.currentUser;
+                final result = await Connectivity().checkConnectivity();
+                final offline = result == ConnectivityResult.none;
+                if (user == null || offline) {
+                  await showDialog<void>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Please sign in first'),
+                      content: const Text('This action requires an online signed-in session.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+                      ],
+                    ),
+                  );
+                  return;
+                }
+                Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const EditProfilePage()))
+                    .then((updated) async {
                   if (updated == true) {
-                    setState(() {}); // Refresh the profile page
+                    await _loadAvatar();
+                    ProfileService.instance.refreshCurrentUserProfile();
                   }
                 });
               }),

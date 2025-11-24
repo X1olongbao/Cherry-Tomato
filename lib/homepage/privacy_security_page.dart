@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_service.dart';
 import '../services/system_notification_service.dart';
 import '../services/task_service.dart';
+import '../userloginforgot/email_otp_verification_page.dart';
 import '../models/task.dart';
 import '../services/task_reminder_service.dart';
 import '../services/database_service.dart';
@@ -34,8 +36,8 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
   bool _oldVisible = false;
   bool _newVisible = false;
 
-  bool notificationsEnabled = true;
-  bool appBlockerEnabled = true;
+  bool notificationsEnabled = false;
+  bool appBlockerEnabled = false;
   String? _selectedTaskId;
 
   final TextEditingController _searchCtrl = TextEditingController();
@@ -46,41 +48,59 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
   static const MethodChannel _appsChannel = MethodChannel('com.example.tomatonator/installed_apps');
   static const MethodChannel _blockerChannel = MethodChannel('com.example.tomatonator/installed_apps');
   static const String _blockedKey = 'blocked_packages';
+  // Avoid blocking the app itself to prevent self-block loops
+  static const Set<String> _selfPackages = {
+    'com.example.tomatonator',
+    'com.example.cherrytomato',
+    'com.cherry.tomato',
+  };
 
   bool get _isOAuthLogin {
-    final fUser = fb.FirebaseAuth.instance.currentUser;
-    if (fUser == null) return false;
-    final providers = fUser.providerData.map((p) => p.providerId).toList();
-    // Common OAuth providers; expand if you add more.
-    return providers.contains('google.com') || providers.contains('github.com') || providers.contains('apple.com');
+    final supaUser = Supabase.instance.client.auth.currentUser;
+    if (supaUser == null) return false;
+    final meta = supaUser.appMetadata;
+    String? provider;
+    if (meta is Map) {
+      final p = meta['provider'];
+      if (p is String && p.isNotEmpty) provider = p;
+    }
+    return provider != null && provider != 'email';
   }
 
   Future<void> _handleChangePassword() async {
-    if (_isOAuthLogin) return;
-    final oldPwd = _oldPwdCtrl.text.trim();
-    final newPwd = _newPwdCtrl.text.trim();
-    if (oldPwd.isEmpty || newPwd.isEmpty) {
+    final result = await Connectivity().checkConnectivity();
+    final offline = result == ConnectivityResult.none;
+    final supaUser = Supabase.instance.client.auth.currentUser;
+    if (supaUser == null || offline) {
       if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Please sign in first'),
+          content: const Text('Password changes require an online signed-in session.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+          ],
+        ),
+      );
       return;
     }
-    try {
-      final email = Supabase.instance.client.auth.currentUser?.email;
-      if (email == null || email.isEmpty) {
-        if (!mounted) return;
-        return;
-      }
-      // Basic verification: try signing in with old password (non-destructive)
-      await AuthService.instance.signIn(email: email, password: oldPwd);
-      // If successful, update current user password
-      await Supabase.instance.client.auth.updateUser(UserAttributes(password: newPwd));
-      if (!mounted) return;
-      _oldPwdCtrl.clear();
-      _newPwdCtrl.clear();
-      // Optional: pop after success
-      // navigator.pop();
-    } catch (e) {
-      if (!mounted) return;
-    }
+    if (_isOAuthLogin) return;
+    final email = Supabase.instance.client.auth.currentUser?.email;
+    if (email == null || email.isEmpty) return;
+    await Supabase.instance.client.auth.signInWithOtp(
+      email: email,
+      shouldCreateUser: false,
+    );
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EmailOtpVerificationPage(
+          otpContext: OtpContext(flow: OtpFlow.forgotPassword, email: email),
+        ),
+      ),
+    );
   }
 
 
@@ -89,12 +109,35 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     super.initState();
     _loadBlockedApps();
     _loadNotificationState();
+    _loadAppBlockerState();
+  }
+
+  @override
+  void dispose() {
+    _persistAppBlockerState();
+    _oldPwdCtrl.dispose();
+    _newPwdCtrl.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _persistAppBlockerState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('app_blocker_enabled', appBlockerEnabled);
   }
 
   Future<void> _loadNotificationState() async {
     final enabled = await SystemNotificationService.instance.areNotificationsEnabled();
     setState(() {
       notificationsEnabled = enabled;
+    });
+  }
+
+  Future<void> _loadAppBlockerState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('app_blocker_enabled') ?? false;
+    setState(() {
+      appBlockerEnabled = enabled;
     });
   }
 
@@ -112,7 +155,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
             final pkg = (m['package'] ?? '').toString();
             return _InstalledApp(name, pkg);
           })
-          .where((a) => a.package.isNotEmpty)
+          .where((a) => a.package.isNotEmpty && !_selfPackages.contains(a.package) && a.name.toLowerCase() != 'cherry tomato')
           .toList(growable: false)
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       setState(() {
@@ -142,7 +185,8 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
 
   Future<void> _saveBlockedApps() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_blockedKey, _selectedApps.toList());
+    final cleaned = _selectedApps.where((pkg) => !_selfPackages.contains(pkg)).toList();
+    await prefs.setStringList(_blockedKey, cleaned);
     await _ensureIconsForSelected();
   }
 
@@ -277,7 +321,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                                   crossAxisCount: 3,
                                   crossAxisSpacing: 12,
                                   mainAxisSpacing: 12,
-                                  childAspectRatio: 0.75,
+                                  childAspectRatio: 1.0,
                                 ),
                                 itemCount: items.length,
                                 itemBuilder: (context, index) {
@@ -341,6 +385,9 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     
     return GestureDetector(
       onTap: () async {
+        if (_selfPackages.contains(app.package) || app.name.toLowerCase() == 'cherry tomato') {
+          return;
+        }
         setState(() {
           if (selected) {
             _selectedApps.remove(app.package);
@@ -362,6 +409,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
         setSheetState(() {});
       },
       child: Container(
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFE53935).withOpacity(0.1) : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(16),
@@ -371,7 +419,9 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
           ),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Stack(
               children: [
@@ -461,11 +511,26 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     // Prompt for permissions if needed before starting
     final proceed = await _confirmPermissionsIfNeeded();
     if (!proceed) {
-      setState(() => appBlockerEnabled = false);
+      if (mounted) {
+        setState(() => appBlockerEnabled = false);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('app_blocker_enabled', false);
+      }
       return;
     }
     await _ensureInterceptionPermissions();
-    final pkgs = _selectedApps.toList();
+    // Double-check permissions after returning from settings
+    final usageGrantedAfter = await _blockerChannel.invokeMethod<bool>('isUsageAccessGranted') ?? false;
+    final overlayGrantedAfter = await _blockerChannel.invokeMethod<bool>('isOverlayPermissionGranted') ?? false;
+    if (!usageGrantedAfter || !overlayGrantedAfter) {
+      if (mounted) {
+        setState(() => appBlockerEnabled = false);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('app_blocker_enabled', false);
+      }
+      return;
+    }
+    final pkgs = _selectedApps.where((p) => !_selfPackages.contains(p)).toList();
     try {
       await _blockerChannel.invokeMethod('startAppBlocker', { 'packages': pkgs });
       if (!mounted) return;
@@ -493,10 +558,25 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       return await showDialog<bool>(
             context: context,
             builder: (ctx) {
+              final needUsage = !usageGranted;
+              final needOverlay = !overlayGranted;
+              final text = StringBuffer()
+                ..writeln('To block apps, grant:')
+                ..writeln();
+              if (needUsage) {
+                text.writeln('1. Usage Access');
+                text.writeln('   Settings → Apps → Cherry Tomato → Special access → Usage access');
+                text.writeln();
+              }
+              if (needOverlay) {
+                text.writeln('2. Draw over other apps');
+                text.writeln('   Settings → Apps → Cherry Tomato → Special access → Display over other apps');
+                text.writeln();
+              }
+              text.writeln('Tap Grant to open settings.');
               return AlertDialog(
                 title: const Text('Permissions Required'),
-                content: const Text(
-                    'Cherry Tomato needs Usage Access and "Draw over other apps" permissions to block apps. Grant access now?'),
+                content: Text(text.toString()),
                 actions: [
                   TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
                   ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Grant')),
@@ -510,13 +590,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _oldPwdCtrl.dispose();
-    _newPwdCtrl.dispose();
-    _searchCtrl.dispose();
-    super.dispose();
-  }
+  
 
   @override
   Widget build(BuildContext context) {
@@ -593,14 +667,8 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                       if (val) {
                         await SystemNotificationService.instance.requestPermissions();
                       }
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Notifications ${val ? 'enabled' : 'disabled'}')),
-                        );
-                      }
                       await SystemNotificationService.instance.setNotificationsEnabled(val);
                       if (!val) {
-                        // Cancel all notifications when disabled
                         await SystemNotificationService.instance.cancelAllNotifications();
                       }
                     },
@@ -625,6 +693,8 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                     value: appBlockerEnabled,
                     onChanged: (val) async {
                       setState(() => appBlockerEnabled = val);
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('app_blocker_enabled', val);
                       if (val) {
                         await _startInterception();
                       } else {
@@ -674,7 +744,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                             crossAxisCount: 3,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
-                            childAspectRatio: 0.75,
+                            childAspectRatio: 1.0,
                           ),
                           itemCount: _selectedApps.length + 1, // Plus button + all apps (no limit)
                           itemBuilder: (context, index) {

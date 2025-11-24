@@ -384,11 +384,13 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            hintText: 'Min',
             suffixText: 'Min',
           );
 
-          Widget numberField(TextEditingController c, {VoidCallback? onTap}) => SizedBox(
-            width: 90,
+          Widget numberField(TextEditingController c, {VoidCallback? onTap, double width = 90}) => SizedBox(
+            width: width,
+            height: 44,
             child: TextField(
               controller: c,
               keyboardType: TextInputType.number,
@@ -396,14 +398,17 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
               readOnly: true,
               onTap: onTap,
               decoration: fieldDec('Min').copyWith(
-                suffixIcon: (editable)
-                    ? const Icon(Icons.expand_more, size: 18, color: Colors.black54)
+                suffixIcon: (editable && onTap != null)
+                    ? GestureDetector(
+                        onTap: onTap,
+                        child: const Icon(Icons.expand_more, size: 18, color: Colors.black54),
+                      )
                     : null,
               ),
             ),
           );
 
-          Future<void> pickMinutes({required String title, required int initial, required int max, required void Function(int value) onPicked}) async {
+          Future<void> pickMinutes({required String title, required int initial, required int max, required void Function(int value) onPicked, void Function(int value)? onChange}) async {
             int localSelected = (initial.clamp(1, max));
             await showDialog<void>(
               context: ctx,
@@ -423,7 +428,10 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                       magnification: 1.05,
                       looping: true,
                       scrollController: FixedExtentScrollController(initialItem: localSelected - 1),
-                      onSelectedItemChanged: (i) => localSelected = i + 1,
+                      onSelectedItemChanged: (i) {
+                        localSelected = i + 1;
+                        if (onChange != null) onChange(localSelected);
+                      },
                       children: List.generate(max, (i) => Center(
                             child: Text('${i + 1}',
                                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
@@ -464,40 +472,90 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                DropdownButtonFormField<PresetMode>(
-                  value: selected,
-                  items: PresetMode.values.map((m) {
-                    return DropdownMenuItem(
-                      value: m,
-                      child: Text(_presetLabel(m)),
+                StatefulBuilder(builder: (ctx2, setLocal2) {
+                  void step(int delta) {
+                    final modes = PresetMode.values;
+                    final i = modes.indexOf(selected);
+                    final next = modes[(i + delta + modes.length) % modes.length];
+                    updateFieldsFor(next);
+                  }
+                  Widget arrow(IconData icon, VoidCallback onTap) {
+                    return InkWell(
+                      onTap: onTap,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                          ],
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Icon(icon, color: _accent, size: 20),
+                      ),
                     );
-                  }).toList(),
-                  onChanged: (m) {
-                    if (m == null) return;
-                    updateFieldsFor(m);
-                  },
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
+                  }
+                  return Row(
+                    children: [
+                      arrow(Icons.arrow_back_ios, () => step(-1)),
+                      Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 12),
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: _accent,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              _presetLabel(selected),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                      arrow(Icons.arrow_forward_ios, () => step(1)),
+                    ],
+                  );
+                }),
                 const SizedBox(height: 16),
                 const Text('Time', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 10),
-                // Always show fields; in Custom mode, tapping opens a wheel picker
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Pomodoro'),
-                    numberField(pomCtrl, onTap: editable
-                        ? () async {
-                            await pickMinutes(title: 'Pomodoro Minutes', initial: int.parse(pomCtrl.text), max: 60, onPicked: (v) {
-                              pomCtrl.text = '$v';
-                            });
-                            setLocal(() {});
-                          }
-                        : null),
+                    numberField(
+                      pomCtrl,
+                      onTap: editable
+                          ? () => pickMinutes(
+                                title: 'Pomodoro Minutes',
+                                initial: int.tryParse(pomCtrl.text) ?? _durations[SessionType.pomodoro]!.inMinutes,
+                                max: 60,
+                                onPicked: (val) {
+                                  pomCtrl.text = '$val';
+                                  setLocal(() {});
+                                },
+                                onChange: (val) {
+                                  pomCtrl.text = '$val';
+                                  setLocal(() {});
+                                },
+                              )
+                          : null,
+                      width: editable ? 130 : 90,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -505,14 +563,25 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Short Break'),
-                    numberField(shortCtrl, onTap: editable
-                        ? () async {
-                            await pickMinutes(title: 'Short Break Minutes', initial: int.parse(shortCtrl.text), max: 15, onPicked: (v) {
-                              shortCtrl.text = '$v';
-                            });
-                            setLocal(() {});
-                          }
-                        : null),
+                    numberField(
+                      shortCtrl,
+                      onTap: editable
+                          ? () => pickMinutes(
+                                title: 'Short Break Minutes',
+                                initial: int.tryParse(shortCtrl.text) ?? _durations[SessionType.shortBreak]!.inMinutes,
+                                max: 15,
+                                onPicked: (val) {
+                                  shortCtrl.text = '$val';
+                                  setLocal(() {});
+                                },
+                                onChange: (val) {
+                                  shortCtrl.text = '$val';
+                                  setLocal(() {});
+                                },
+                              )
+                          : null,
+                      width: editable ? 130 : 90,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -520,14 +589,25 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Long Break'),
-                    numberField(longCtrl, onTap: editable
-                        ? () async {
-                            await pickMinutes(title: 'Long Break Minutes', initial: int.parse(longCtrl.text), max: 30, onPicked: (v) {
-                              longCtrl.text = '$v';
-                            });
-                            setLocal(() {});
-                          }
-                        : null),
+                    numberField(
+                      longCtrl,
+                      onTap: editable
+                          ? () => pickMinutes(
+                                title: 'Long Break Minutes',
+                                initial: int.tryParse(longCtrl.text) ?? _durations[SessionType.longBreak]!.inMinutes,
+                                max: 30,
+                                onPicked: (val) {
+                                  longCtrl.text = '$val';
+                                  setLocal(() {});
+                                },
+                                onChange: (val) {
+                                  longCtrl.text = '$val';
+                                  setLocal(() {});
+                                },
+                              )
+                          : null,
+                      width: editable ? 130 : 90,
+                    ),
                   ],
                 ),
                 
@@ -535,41 +615,44 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
             ),
             actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             actions: [
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () {
-                    final p = int.tryParse(pomCtrl.text);
-                    final s = int.tryParse(shortCtrl.text);
-                    final l = int.tryParse(longCtrl.text);
-                    if (p == null || p <= 0 || s == null || s <= 0 || l == null || l <= 0) {
-                      return;
-                    }
-                    setState(() {
-                      _presetMode = selected;
-                      if (selected != PresetMode.custom) {
-                        _applyPreset(selected);
-                      } else {
-                        _durations = {
-                          SessionType.pomodoro: Duration(minutes: p),
-                          SessionType.shortBreak: Duration(minutes: s),
-                          SessionType.longBreak: Duration(minutes: l),
-                        };
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () {
+                      final p = int.tryParse(pomCtrl.text);
+                      final s = int.tryParse(shortCtrl.text);
+                      final l = int.tryParse(longCtrl.text);
+                      if (p == null || p <= 0 || s == null || s <= 0 || l == null || l <= 0) {
+                        return;
                       }
-                    });
-                    _resetCycle();
-                    Navigator.of(ctx).pop();
-                  },
-                  child: const Text('Ok'),
+                      _stopTimer();
+                      setState(() {
+                        _presetMode = selected;
+                        if (selected != PresetMode.custom) {
+                          _applyPreset(selected);
+                        } else {
+                          _durations = {
+                            SessionType.pomodoro: Duration(minutes: p),
+                            SessionType.shortBreak: Duration(minutes: s),
+                            SessionType.longBreak: Duration(minutes: l),
+                          };
+                        }
+                        _current = SessionType.pomodoro;
+                        _remaining = _durations[SessionType.pomodoro]!;
+                        _endAt = null;
+                      });
+                      Navigator.of(ctx).pop();
+                    },
+                    child: const Text('Ok'),
+                  ),
                 ),
-              ),
             ],
           );
         });
@@ -1134,6 +1217,12 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       return;
     }
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool('app_blocker_enabled') ?? false;
+      if (!enabled) {
+        Logger.i('App blocker: Disabled by toggle');
+        return;
+      }
       final pkgs = await _getBlockedPackages();
       Logger.i('App blocker: Found ${pkgs.length} blocked packages: $pkgs');
       if (pkgs.isEmpty) {

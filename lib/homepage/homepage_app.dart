@@ -8,6 +8,7 @@ import 'statistic_page.dart';
 import 'profile.dart';
 import 'session_history_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'notification_page.dart';
 import '../services/notification_service.dart';
 import '../services/auth_service.dart';
@@ -17,6 +18,8 @@ import '../services/task_service.dart';
 import '../services/database_service.dart';
 import '../models/task.dart';
 import '../models/session_type.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../landingpage/onboarding1_page.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -39,6 +42,7 @@ class _HomepageState extends State<Homepage> {
     _taskService.activeTasks.addListener(_handleTaskUpdates);
     _handleTaskUpdates();
     unawaited(_taskService.refreshActiveTasks());
+    unawaited(_maybeShowOnboarding());
   }
 
   @override
@@ -51,6 +55,21 @@ class _HomepageState extends State<Homepage> {
     setState(() {
       _tasks = _taskService.activeTasks.value;
     });
+  }
+
+  Future<void> _maybeShowOnboarding() async {
+    final user = AuthService.instance.currentUser;
+    if (user == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'seen_onboarding_v1_${user.id}';
+    if (prefs.getBool(key) == true) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const Onboarding1Page()),
+      );
+    });
+    await prefs.setBool(key, true);
   }
 
   String _formatDate(Task task) {
@@ -138,7 +157,35 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
-  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
+  Future<bool> _canOpenOnlinePage() async {
+    final user = AuthService.instance.currentUser;
+    final result = await Connectivity().checkConnectivity();
+    final offline = result == ConnectivityResult.none;
+    if (user == null || offline) {
+      if (!mounted) return false;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Please sign in first'),
+          content: const Text('This page requires an online signed-in session.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+          ],
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _onItemTapped(int index) async {
+    if (index == 2) {
+      final ok = await _canOpenOnlinePage();
+      if (!ok) return;
+    }
+    if (!mounted) return;
+    setState(() => _selectedIndex = index);
+  }
 
   // ✅ Proper pages list (ProfilePage now used directly)
   List<Widget> get _pages => [
@@ -378,6 +425,7 @@ class _HomepageState extends State<Homepage> {
                               });
                             }
                           : null,
+                      onLongPress: () => _showTaskContextMenu(task),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
@@ -552,7 +600,6 @@ class _HomepageState extends State<Homepage> {
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
                                                 const SizedBox(height: 6),
-                                                _NextReminderTicker(taskId: task.id, color: textColor.withOpacity(0.85)),
                                               ],
                                             ),
                                           ),
@@ -623,98 +670,101 @@ class _HomepageState extends State<Homepage> {
           color: _selectedIndex == index ? tomatoRed : Colors.black54,
         ),
       );
-}
 
-class _NextReminderTicker extends StatefulWidget {
-  final String taskId;
-  final Color color;
-  const _NextReminderTicker({required this.taskId, required this.color});
-  @override
-  State<_NextReminderTicker> createState() => _NextReminderTickerState();
-}
-
-class _NextReminderTickerState extends State<_NextReminderTicker> {
-  DateTime? _next;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      final now = DateTime.now();
-      if (_next == null || now.second % 5 == 0) {
-        _load();
-      }
-      setState(() {});
-    });
-  }
-
-  Future<void> _load() async {
-    final rows = await DatabaseService.instance.getTaskReminders(widget.taskId);
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    DateTime? best;
-    for (final m in rows) {
-      final ts = (m['reminder_time'] as num).toInt();
-      if (ts >= nowMs) {
-        final dt = DateTime.fromMillisecondsSinceEpoch(ts);
-        if (best == null || dt.isBefore(best)) best = dt;
-      }
-    }
-    if (mounted) setState(() => _next = best);
-  }
-
-  String _formatClock(DateTime dt) {
-    final h24 = dt.hour;
-    final ampm = h24 >= 12 ? 'PM' : 'AM';
-    var h12 = h24 % 12;
-    if (h12 == 0) h12 = 12;
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h12:$m $ampm';
-  }
-
-  String _formatDiff(DateTime dt) {
-    final now = DateTime.now();
-    final d = dt.difference(now);
-    if (d.isNegative) return 'due now';
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    if (h > 0) return '${h}h ${m}m ${s}s';
-    if (m > 0) return '${m}m ${s}s';
-    return '${s}s';
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Icon(Icons.notifications_active, size: 16, color: Colors.black54),
-        const SizedBox(width: 6),
-        Expanded(
-          child: GestureDetector(
-            onTap: _load,
-            child: Text(
-              _next == null
-                  ? 'No reminder scheduled'
-                  : 'Next reminder ${_formatClock(_next!)} • ${_formatDiff(_next!)}',
-              style: TextStyle(color: widget.color, fontSize: 12),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+  Future<void> _showTaskContextMenu(Task task) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: false,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      builder: (ctx) {
+        final Color priorityColor = _priorityColor(task.priority);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(width: 6, height: 24, decoration: BoxDecoration(color: priorityColor, borderRadius: BorderRadius.circular(3))),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(task.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.calendar_today, size: 16, color: Colors.black54),
+                              const SizedBox(width: 6),
+                              Text(task.formattedDueDate, style: const TextStyle(color: Colors.black87)),
+                              const SizedBox(width: 12),
+                              const Icon(Icons.access_time, size: 16, color: Colors.black54),
+                              const SizedBox(width: 6),
+                              Text(task.formattedDueTime, style: const TextStyle(color: Colors.black87)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.edit, color: Colors.black87),
+                  title: const Text('Edit Task'),
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CreateNewTaskPage(task: task),
+                      ),
+                    );
+                    if (result == true) {
+                      unawaited(_taskService.refreshActiveTasks());
+                    } else if (result == 'delete') {
+                      await _taskService.deleteTask(task.id);
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete, color: Colors.red),
+                  title: const Text('Delete Task'),
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (dCtx) {
+                        return AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          title: const Text('Delete Task'),
+                          content: const Text('Are you sure you want to delete this task?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.of(dCtx).pop(false), child: const Text('Cancel')),
+                            ElevatedButton(onPressed: () => Navigator.of(dCtx).pop(true), child: const Text('Delete')),
+                          ],
+                        );
+                      },
+                    );
+                    if (confirm == true) {
+                      await _taskService.deleteTask(task.id);
+                    }
+                  },
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
+
+// Removed next reminder ticker from task banner
 
 extension on _HomepageState {
   void _showMotivationDialog(String message) {

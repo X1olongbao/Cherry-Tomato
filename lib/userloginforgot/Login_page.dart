@@ -2,9 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/homepage/homepage_app.dart';
+import 'package:tomatonator/userloginforgot/email_otp_verification_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'sign_up_page.dart';
 import 'forgot_pass_page.dart';
@@ -23,6 +25,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordCtrl = TextEditingController();
   bool _loading = false; // track ongoing login
   String? _error; // last error message
+  bool _showPassword = false;
 
   @override
   void initState() {
@@ -69,12 +72,18 @@ class _LoginPageState extends State<LoginPage> {
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
       );
+      try { await FirebaseAuth.instance.signOut(); } catch (_) {}
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final uid = AuthService.instance.currentUser?.id;
+        if (uid != null && uid.isNotEmpty) {
+          await prefs.setBool('seen_onboarding_v1_$uid', true);
+        }
+      } catch (_) {}
       if (!mounted) return;
-      // Navigate to Homepage and clear previous auth screens from stack
-      Navigator.pushAndRemoveUntil(
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const Homepage()),
-        (route) => false,
       );
     } on AuthFailure catch (e) {
       setState(() => _error = e.message);
@@ -274,8 +283,16 @@ class _LoginPageState extends State<LoginPage> {
                       style: TextStyle(fontSize: 16, color: Colors.black))),
               TextField(
                   controller: _passwordCtrl,
-                  obscureText: true,
-                  decoration: _fieldDecoration('Enter your password')),
+                  obscureText: !_showPassword,
+                  decoration: _fieldDecoration('Enter your password').copyWith(
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _showPassword ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () => setState(() => _showPassword = !_showPassword),
+                    ),
+                  )),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
