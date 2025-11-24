@@ -78,6 +78,33 @@ class TaskService {
     return DatabaseService.instance.getTaskById(id);
   }
 
+  Future<Task> updateTaskDetails({
+    required Task existing,
+    required String title,
+    TaskPriority? priority,
+    DateTime? due,
+    String? clockTime,
+    List<TaskSubtask>? subtasks,
+  }) async {
+    final newSubtasks = subtasks ?? existing.subtasks;
+    final updated = existing.copyWith(
+      title: title,
+      priority: priority ?? existing.priority,
+      dueAt: due?.millisecondsSinceEpoch,
+      clockTime: clockTime ?? existing.clockTime,
+      subtasks: newSubtasks,
+      totalSubtasks: newSubtasks.length,
+      completedSubtasks: newSubtasks.where((s) => s.done).length,
+      synced: false,
+    );
+    await DatabaseService.instance.updateTask(updated);
+    await refreshActiveTasks();
+    if (updated.dueAt != null && updated.status != TaskStatus.done) {
+      unawaited(TaskReminderService.instance.scheduleRemindersForTask(updated));
+    }
+    return updated;
+  }
+
   Future<void> deleteTask(String id) async {
     // Cancel reminders before deleting task
     await TaskReminderService.instance.cancelRemindersForTask(id);

@@ -58,6 +58,12 @@ Future<void> initializeBackend() async {
   // Optionally listen to auth changes to trigger sync after login/logout
   AuthService.instance.authStateChanges.listen((user) async {
     if (user != null) {
+      try {
+        await Supabase.instance.client.from('profiles').upsert({
+          'id': user.id,
+          'last_login': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (_) {}
       SyncService.instance.syncUnsyncedSessionsForCurrentUser();
       // Refresh profile display name when user logs in
       ProfileService.instance.refreshCurrentUserProfile();

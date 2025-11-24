@@ -4,22 +4,26 @@ import '../homepage/homepage_app.dart';
 import 'set_new_pass.dart';
 import '../services/profile_service.dart';
 import '../utilities/logger.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
 const Color tomatoRed = Color(0xFFE53935);
 
-enum OtpFlow { registration, forgotPassword }
+enum OtpFlow { registration, forgotPassword, login, changeEmail }
 
 class OtpContext {
   final OtpFlow flow;
   final String email;
   final String? username; // required for registration flow
   final String? password; // registration password; not used in forgot flow here
+  final String? newEmail; // for changeEmail flow
 
   OtpContext({
     required this.flow,
     required this.email,
     this.username,
     this.password,
+    this.newEmail,
   });
 }
 
@@ -37,6 +41,9 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
   bool _verifying = false;
   bool _resending = false;
   String? _error;
+  DateTime? _cooldownUntil;
+  Timer? _cooldownTimer;
+  int _cooldownRemaining = 0;
 
   @override
   void initState() {
@@ -47,6 +54,7 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
   @override
   void dispose() {
     _otpCtrl.dispose();
+    _cooldownTimer?.cancel();
     super.dispose();
   }
 
@@ -79,6 +87,7 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
 
   Future<void> _resendOtp() async {
     if (_resending) return;
+    if (_cooldownUntil != null && DateTime.now().isBefore(_cooldownUntil!)) return;
     setState(() => _resending = true);
     try {
       final supabase = Supabase.instance.client;
@@ -94,12 +103,39 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
               }
             : null,
       );
+      _startCooldown(const Duration(minutes: 3));
       
     } catch (e) {
       setState(() => _error = 'Failed to resend code. Please try again.');
     } finally {
       if (mounted) setState(() => _resending = false);
     }
+  }
+
+  void _startCooldown(Duration d) {
+    _cooldownUntil = DateTime.now().add(d);
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      final now = DateTime.now();
+      final remaining = _cooldownUntil!.difference(now).inSeconds;
+      if (remaining <= 0) {
+        _cooldownTimer?.cancel();
+        _cooldownUntil = null;
+        _cooldownRemaining = 0;
+        if (mounted) setState(() {});
+      } else {
+        _cooldownRemaining = remaining;
+        if (mounted) setState(() {});
+      }
+    });
+    setState(() {});
+  }
+
+  String _formatCooldown() {
+    final s = _cooldownRemaining;
+    final m = s ~/ 60;
+    final r = s % 60;
+    return '${m.toString().padLeft(2, '0')}:${r.toString().padLeft(2, '0')}';
   }
 
   Future<void> _verifyAndProceed() async {
@@ -173,7 +209,7 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
           MaterialPageRoute(builder: (_) => const Homepage()),
           (route) => false,
         );
-      } else {
+      } else if (widget.otpContext.flow == OtpFlow.forgotPassword) {
         // For forgot password, navigate to SetNewPasswordPage to change password AFTER OTP verification.
         if (!mounted) return;
         Navigator.pushReplacement(
@@ -185,6 +221,32 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
             ),
           ),
         );
+      } else if (widget.otpContext.flow == OtpFlow.login) {
+        if (!mounted) return;
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final uid = verifyRes.user?.id;
+          if (uid != null && uid.isNotEmpty) {
+            await prefs.setBool('seen_onboarding_v1_${uid}', true);
+          }
+        } catch (_) {}
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const Homepage()),
+          (route) => false,
+        );
+      } else if (widget.otpContext.flow == OtpFlow.changeEmail) {
+        try {
+          final newEmail = widget.otpContext.newEmail;
+          if (newEmail == null || newEmail.isEmpty) {
+            throw Exception('Missing new email');
+          }
+          await supabase.auth.updateUser(UserAttributes(email: newEmail));
+        } catch (e) {
+          Logger.w('Failed to initiate email change: $e');
+        }
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       final msg = e.toString().toLowerCase();
@@ -335,7 +397,7 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
                       ),
                     ),
             TextButton(
-              onPressed: _resending ? null : _resendOtp,
+              onPressed: (_resending || (_cooldownUntil != null && DateTime.now().isBefore(_cooldownUntil!))) ? null : _resendOtp,
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         minimumSize: Size.zero,
@@ -347,14 +409,23 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
                               width: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : Text(
-                              'Resend',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: tomatoRed,
-                              ),
-                            ),
+                          : (_cooldownUntil != null && DateTime.now().isBefore(_cooldownUntil!)
+                              ? Text(
+                                  'Resend in ${_formatCooldown()}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[600],
+                                  ),
+                                )
+                              : Text(
+                                  'Resend',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: tomatoRed,
+                                  ),
+                                )),
             ),
           ],
                 ),

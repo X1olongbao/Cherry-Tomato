@@ -453,15 +453,27 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
                   );
                 }).toList();
                 final due = _selectedDueDateTime();
-                await TaskService.instance.createTask(
-                  title: _title.text.trim(),
-                  priority: _selectedPriority(),
-                  createdAt: DateTime.now().millisecondsSinceEpoch,
-                  dueAt: due?.millisecondsSinceEpoch,
-                  clockTime:
-                      "$_hour:${_minute.toString().padLeft(2, '0')} $_period",
-                  subtasks: subtasks,
-                );
+                if (widget.task == null) {
+                  await TaskService.instance.createTask(
+                    title: _title.text.trim(),
+                    priority: _selectedPriority(),
+                    createdAt: DateTime.now().millisecondsSinceEpoch,
+                    dueAt: due?.millisecondsSinceEpoch,
+                    clockTime:
+                        "$_hour:${_minute.toString().padLeft(2, '0')} $_period",
+                    subtasks: subtasks,
+                  );
+                } else {
+                  await TaskService.instance.updateTaskDetails(
+                    existing: widget.task!,
+                    title: _title.text.trim(),
+                    priority: _selectedPriority(),
+                    due: due,
+                    clockTime:
+                        "$_hour:${_minute.toString().padLeft(2, '0')} $_period",
+                    subtasks: subtasks,
+                  );
+                }
                 if (mounted) {
                   Navigator.pop(context, true);
                 }

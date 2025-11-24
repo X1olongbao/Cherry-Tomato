@@ -68,6 +68,36 @@ class SessionService {
       NotificationService.instance.addFirstPomodoroCongrats();
     }
 
+    // Add a generic in-app notification for each completed Pomodoro
+    if (sessionType == SessionType.pomodoro) {
+      NotificationService.instance.addPomodoroCompleted(
+        taskName: freshTask?.title,
+      );
+      // Compute streak from local sessions and notify milestones
+      try {
+        final all = await DatabaseService.instance.getSessions(userId: user?.id);
+        final dates = <DateTime>{};
+        for (final s in all) {
+          final dt = DateTime.fromMillisecondsSinceEpoch(s.completedAt);
+          dates.add(DateTime(dt.year, dt.month, dt.day));
+        }
+        var streak = 0;
+        var cur = DateTime.now();
+        cur = DateTime(cur.year, cur.month, cur.day);
+        if (!dates.contains(cur)) {
+          final y = cur.subtract(const Duration(days: 1));
+          if (dates.contains(y)) cur = y; else cur = DateTime(1970);
+        }
+        while (dates.contains(cur)) {
+          streak++;
+          cur = cur.subtract(const Duration(days: 1));
+        }
+        if (streak == 7 || streak == 14 || streak == 30) {
+          NotificationService.instance.addStreakMilestone(streak);
+        }
+      } catch (_) {}
+    }
+
     await SyncService.instance.syncUnsyncedSessionsForCurrentUser();
     return saved;
   }

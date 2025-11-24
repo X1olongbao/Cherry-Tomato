@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/services/profile_service.dart';
+import 'package:tomatonator/userloginforgot/email_otp_verification_page.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -138,19 +139,29 @@ class _EditProfilePageState extends State<EditProfilePage> {
       }
       
       if (profileData.length > 1) { // More than just id
-        await supabase.from('profiles').upsert(profileData);
+        try {
+          await supabase.from('profiles').update(profileData).eq('id', user.id);
+        } catch (_) {
+          await supabase.from('profiles').upsert(profileData);
+        }
       }
 
-      // Update email in auth (if changed)
-      // Note: Changing email requires verification, so we'll update it but user needs to verify
+      // If email was changed, require OTP 2FA before initiating change
       if (email.isNotEmpty && email != user.email) {
-        try {
-          await supabase.auth.updateUser(
-            UserAttributes(email: email),
-          );
-        } catch (e) {
-          // Email update might require verification - continue with username update
-          // User will need to verify new email separately
+        await supabase.auth.signInWithOtp(email: user.email!, shouldCreateUser: false);
+        if (!mounted) return;
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmailOtpVerificationPage(
+              otpContext: OtpContext(flow: OtpFlow.changeEmail, email: user.email!, newEmail: email),
+            ),
+          ),
+        );
+        if (result != true) {
+          // Abort save if OTP was not verified
+          setState(() => _isSaving = false);
+          return;
         }
       }
 
@@ -163,9 +174,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       await ProfileService.instance.refreshCurrentUserProfile();
 
       if (!mounted) return;
-
-      if (!mounted) return;
-      Navigator.of(context).pop(true); // Return true to indicate success
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
     } finally {

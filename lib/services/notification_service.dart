@@ -30,6 +30,30 @@ class NotificationService {
     ));
   }
 
+  /// Convenience: adds a generic Pomodoro completion notification.
+  void addPomodoroCompleted({String? taskName}) {
+    final msg = taskName != null && taskName.trim().isNotEmpty
+        ? 'Pomodoro completed for "$taskName"'
+        : 'Pomodoro session completed';
+    add(AppNotification(
+      id: _uuid.v4(),
+      title: 'Notification',
+      message: msg,
+      createdAt: DateTime.now(),
+    ));
+  }
+
+  /// Convenience: adds a streak milestone notification (e.g., 7, 14, 30 days).
+  void addStreakMilestone(int days) {
+    add(AppNotification(
+      id: _uuid.v4(),
+      title: 'Notification',
+      message: 'Streak milestone reached: $days days in a row!'
+          ' Keep it up!',
+      createdAt: DateTime.now(),
+    ));
+  }
+
   /// Marks all notifications as read (non-persistent).
   void markAllRead() {
     notifications.value = notifications.value

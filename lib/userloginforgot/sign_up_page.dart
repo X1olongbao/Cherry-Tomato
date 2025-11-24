@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'login_page.dart';
 import 'email_otp_verification_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'dart:math';
+import 'package:tomatonator/homepage/homepage_app.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -18,6 +22,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final _passwordCtrl = TextEditingController();
   bool _loading = false; // track ongoing signup
   String? _error; // last error message
+  bool _showPassword = false;
 
   @override
   void initState() {
@@ -81,6 +86,101 @@ class _SignUpPageState extends State<SignUpPage> {
       );
     } catch (e) {
       setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _googleSignup() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+      final GoogleSignInAccount? gUser = await googleSignIn.signIn();
+      if (gUser == null) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      final gAuth = await gUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: gAuth.accessToken,
+        idToken: gAuth.idToken,
+      );
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      try {
+        if (gAuth.idToken != null) {
+          await Supabase.instance.client.auth.signInWithIdToken(
+            provider: Provider.google,
+            idToken: gAuth.idToken!,
+            accessToken: gAuth.accessToken,
+          );
+        }
+      } catch (_) {}
+
+      if (Supabase.instance.client.auth.currentUser == null) {
+        final email = FirebaseAuth.instance.currentUser?.email ?? gUser.email;
+        if (email.isEmpty) {
+          throw Exception('Google account has no email; cannot create Supabase session');
+        }
+
+        final syntheticPassword = 'google-oauth-${gUser.id}-${email.hashCode}';
+        try {
+          await Supabase.instance.client.auth.signUp(
+            email: email,
+            password: syntheticPassword,
+            data: {'username': 'User'},
+          );
+        } catch (_) {}
+        try {
+          await Supabase.instance.client.auth.signInWithPassword(
+            email: email,
+            password: syntheticPassword,
+          );
+        } catch (e) {
+          throw Exception('Supabase login failed after Google sign-in: $e');
+        }
+      }
+
+      try {
+        final supaUser = Supabase.instance.client.auth.currentUser;
+        if (supaUser != null) {
+          final existing = await Supabase.instance.client
+              .from('profiles')
+              .select('id')
+              .eq('id', supaUser.id)
+              .maybeSingle();
+          if (existing == null) {
+            final rng = Random();
+            final username = 'User${rng.nextInt(900000) + 100000}';
+            await Supabase.instance.client.from('profiles').upsert({
+              'id': supaUser.id,
+              'username': username,
+              'email': FirebaseAuth.instance.currentUser?.email ?? gUser.email,
+              'phone_number': null,
+              'provider': 'google',
+              'is_verified': true,
+              'last_login': DateTime.now().toUtc().toIso8601String(),
+            });
+          }
+        }
+      } catch (_) {}
+
+      if (Supabase.instance.client.auth.currentUser == null) {
+        throw Exception('Logged into Google (Firebase) but not into Supabase');
+      }
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const Homepage()),
+      );
+    } catch (e) {
+      setState(() => _error = 'Google sign-up failed: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -230,10 +330,15 @@ class _SignUpPageState extends State<SignUpPage> {
               ),
               TextField(
                 controller: _passwordCtrl,
-                obscureText: true,
+                obscureText: !_showPassword,
                 decoration: _fieldDecoration('Enter your password').copyWith(
-                  suffixIcon:
-                      const Icon(Icons.visibility_off, color: Colors.grey),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showPassword ? Icons.visibility : Icons.visibility_off,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () => setState(() => _showPassword = !_showPassword),
+                  ),
                 ),
               ),
 
@@ -313,7 +418,7 @@ class _SignUpPageState extends State<SignUpPage> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: _loading ? null : _googleSignup,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: const BorderSide(color: Colors.black54, width: 1),

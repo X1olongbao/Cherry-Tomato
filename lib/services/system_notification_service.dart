@@ -142,10 +142,8 @@ class SystemNotificationService {
   /// Request notification-related permissions (Android)
   Future<void> requestPermissions() async {
     if (kIsWeb) return;
-    final android = _notifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    await android?.requestNotificationsPermission();
-    await android?.requestExactAlarmsPermission();
+    // Do not request permissions automatically.
+    // Permissions are requested when user enables notifications in settings.
   }
 
   // ========== Pomodoro Session Notifications ==========
