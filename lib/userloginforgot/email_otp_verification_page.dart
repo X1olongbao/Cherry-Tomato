@@ -203,6 +203,11 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
           Logger.w('Failed to refresh profile: $e');
         }
 
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('seen_onboarding_v1_${userId}', true);
+        } catch (_) {}
+
         if (!mounted) return;
         Navigator.pushAndRemoveUntil(
           context,

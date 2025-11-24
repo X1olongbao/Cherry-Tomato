@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:math';
 import 'package:tomatonator/homepage/homepage_app.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -175,6 +176,13 @@ class _SignUpPageState extends State<SignUpPage> {
         throw Exception('Logged into Google (Firebase) but not into Supabase');
       }
       if (!mounted) return;
+      try {
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('seen_onboarding_v1_${user.id}', true);
+        }
+      } catch (_) {}
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const Homepage()),

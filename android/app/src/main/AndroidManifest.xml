@@ -39,7 +39,8 @@
         <!-- App blocker foreground service -->
         <service
             android:name=".AppBlockerService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
