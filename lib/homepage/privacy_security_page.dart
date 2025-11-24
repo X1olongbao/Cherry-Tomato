@@ -529,21 +529,6 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _card(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.warning_amber_rounded, color: Color(0xFFE53935)),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Debug logging is disabled for privacy. No diagnostic logs are recorded.',
-                    style: TextStyle(fontSize: 14, color: Colors.black87),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 12),
           _sectionHeader('Security'),
           const SizedBox(height: 12),
@@ -605,6 +590,9 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                     onChanged: (val) async {
                       setState(() => notificationsEnabled = val);
                       Logger.i('Notification toggle: $val');
+                      if (val) {
+                        await SystemNotificationService.instance.requestPermissions();
+                      }
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Notifications ${val ? 'enabled' : 'disabled'}')),
@@ -623,179 +611,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
             ),
           ),
           const SizedBox(height: 12),
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _tileHeader(Icons.science, 'Notification Self-Test'),
-                const SizedBox(height: 8),
-                _helpText('Use these buttons to verify notifications work in foreground/background.'),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 44,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            await SystemNotificationService.instance.notifyPomodoroStart(taskName: 'Test');
-                          },
-                          child: const Text('Show Now'),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 44,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            final when = DateTime.now().add(const Duration(seconds: 10));
-                            await SystemNotificationService.instance.scheduleGeneralReminder(
-                              title: 'Test Notification',
-                              message: 'Scheduled +10 seconds',
-                              reminderTime: when,
-                            );
-                          },
-                          child: const Text('Schedule +10s'),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ValueListenableBuilder<List<Task>>(
-                  valueListenable: TaskService.instance.activeTasks,
-                  builder: (context, tasks, _) {
-                    final items = tasks;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedTaskId,
-                                items: items
-                                    .map((t) => DropdownMenuItem(
-                                          value: t.id,
-                                          child: Text(t.title, overflow: TextOverflow.ellipsis),
-                                        ))
-                                    .toList(),
-                                onChanged: (val) => setState(() => _selectedTaskId = val),
-                                decoration: const InputDecoration(
-                                  labelText: 'Select a task',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            SizedBox(
-                              height: 44,
-                              child: ElevatedButton(
-                                onPressed: (_selectedTaskId == null)
-                                    ? null
-                                    : () async {
-                                        final t = items.firstWhere((x) => x.id == _selectedTaskId);
-                                        final when = DateTime.now().add(const Duration(minutes: 1));
-                                        await SystemNotificationService.instance.scheduleTaskReminder(
-                                          taskId: t.id,
-                                          taskTitle: t.title,
-                                          reminderTime: when,
-                                          reminderType: 'due_soon',
-                                          customMessage: '"${t.title}" is due in 1 minute.',
-                                        );
-                                      },
-                                child: const Text('Schedule Selected +1m'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: SizedBox(
-                                height: 44,
-                                child: OutlinedButton(
-                                  onPressed: (_selectedTaskId == null)
-                                      ? null
-                                      : () async {
-                                          final t = items.firstWhere((x) => x.id == _selectedTaskId);
-                                          await TaskReminderService.instance.scheduleRemindersForTask(t);
-                                        },
-                                  child: const Text('Reschedule From due_at'),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: SizedBox(
-                                height: 44,
-                                child: OutlinedButton(
-                                  onPressed: (_selectedTaskId == null)
-                                      ? null
-                                      : () async {
-                                          final t = items.firstWhere((x) => x.id == _selectedTaskId);
-                                          final rows = await DatabaseService.instance.getTaskReminders(t.id);
-                                          if (!mounted) return;
-                                          await showDialog<void>(
-                                            context: context,
-                                            builder: (ctx) {
-                                              return AlertDialog(
-                                                title: const Text('Scheduled Reminders'),
-                                                content: SizedBox(
-                                                  width: double.maxFinite,
-                                                  child: Column(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: rows.isEmpty
-                                                        ? [const Text('None')]
-                                                        : rows.map((m) {
-                                                            final ts = DateTime.fromMillisecondsSinceEpoch((m['reminder_time'] as num).toInt());
-                                                            final type = (m['reminder_type'] ?? '').toString();
-                                                            return Text('$type • ${ts.toLocal()}');
-                                                          }).toList(),
-                                                  ),
-                                                ),
-                                                actions: [
-                                                  TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
-                                                ],
-                                              );
-                                            },
-                                          );
-                                        },
-                                  child: const Text('Show Scheduled'),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final when = DateTime.now().add(const Duration(minutes: 1));
-                      await SystemNotificationService.instance.scheduleTaskReminder(
-                        taskId: 'test-task',
-                        taskTitle: 'Sample Task',
-                        reminderTime: when,
-                        reminderType: 'due_soon',
-                        customMessage: 'Sample Task is due in 1 minute.',
-                      );
-                    },
-                    child: const Text('Schedule Task Reminder +1m'),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          
           const SizedBox(height: 12),
           _card(
             child: Column(

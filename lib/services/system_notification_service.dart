@@ -126,7 +126,7 @@ class SystemNotificationService {
   Future<bool> areNotificationsEnabled() async {
     if (kIsWeb) return false;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('notifications_enabled') ?? true;
+    return prefs.getBool('notifications_enabled') ?? false;
   }
 
   /// Set notifications enabled/disabled
@@ -137,6 +137,15 @@ class SystemNotificationService {
     if (!enabled) {
       await cancelAllNotifications();
     }
+  }
+
+  /// Request notification-related permissions (Android)
+  Future<void> requestPermissions() async {
+    if (kIsWeb) return;
+    final android = _notifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await android?.requestNotificationsPermission();
+    await android?.requestExactAlarmsPermission();
   }
 
   // ========== Pomodoro Session Notifications ==========
