@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
+import '../models/task.dart';
+import '../models/pomodoro_session.dart';
+import '../services/database_service.dart';
+import '../services/auth_service.dart';
+import '../services/session_service.dart';
+import 'package:tomatonator/services/app_usage_service.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
+/// Weekly statistics page showing total app usage time per day in hours.
+/// Fetches data from Supabase table `app_usage` and updates dynamically
+/// whenever new usage data is recorded.
 class StatisticPage extends StatelessWidget {
-  final List<dynamic> tasks;
+  final List<Task> tasks;
   const StatisticPage({super.key, required this.tasks});
 
   @override
   Widget build(BuildContext context) {
-    final int totalTasks = tasks.length;
-    final int completedTasks =
-        tasks.where((t) => (t is dynamic) ? (t.isDone == true) : false).length;
 
-    final weeklyData = {
-      "Sun": 14,
-      "Mon": 18,
-      "Tue": 15,
-      "Wed": 10,
-      "Thu": 8,
-      "Fri": 17,
-      "Sat": 14,
-    };
-    final maxValue = weeklyData.values.reduce((a, b) => a > b ? a : b);
+    // Build current week dates Sun → Sat
+    final weekDates = _currentWeekDates();
+    // Listen to usage minutes for the current week via AppUsageService
+    final usageNotifier = AppUsageService.instance.weekUsageMinutes;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -106,74 +106,115 @@ class StatisticPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildStatBox(totalTasks.toString(), "TASK", tomatoRed),
-                  _buildStatBox(
-                      completedTasks.toString(), "COMPLETED", Colors.green),
-                ],
+              FutureBuilder<List<dynamic>>(
+                future: Future.wait([
+                  DatabaseService.instance.getTasks(
+                    userId: AuthService.instance.currentUser?.id,
+                  ),
+                  SessionService.instance.mergedSessionsForCurrentUser(),
+                ]),
+                builder: (context, snapshot) {
+                  final tasks = snapshot.data != null && snapshot.data!.isNotEmpty
+                      ? (snapshot.data![0] as List<Task>)
+                      : const <Task>[];
+                  final finished = snapshot.data != null && snapshot.data!.length > 1
+                      ? (snapshot.data![1] as List<PomodoroSession>)
+                      : const <PomodoroSession>[];
+                  final pending = tasks.where((t) => t.isDone != true).length;
+                  final completed = finished.length;
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildStatBox(pending.toString(), "TASK", tomatoRed),
+                      _buildStatBox(completed.toString(), "COMPLETED", Colors.green),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 32),
 
-              // 📊 Weekly chart
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [
-                    BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 8,
-                        offset: Offset(0, 3))
-                  ],
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "For This Week",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Colors.black,
-                      ),
+              // 📊 Weekly usage chart (Sun → Sat), dynamic updates via ValueListenable
+              ValueListenableBuilder<Map<DateTime, int>>(
+                valueListenable: usageNotifier,
+                builder: (context, usageMap, _) {
+                  // Create an ordered list of minutes for the week
+                  final minutesPerDay = weekDates
+                      .map((d) => usageMap[d] ?? 0)
+                      .toList(growable: false);
+                  final maxMinutes =
+                      (minutesPerDay.isEmpty) ? 0 : minutesPerDay.reduce((a, b) => a > b ? a : b);
+
+                  return Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 8,
+                            offset: Offset(0, 3))
+                      ],
                     ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      height: 220,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: weeklyData.entries.map((entry) {
-                          final barHeight = (entry.value / maxValue) * 160;
-                          final barColor = _getDayColor(entry.key);
-                          return Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Container(
-                                width: 24,
-                                height: barHeight,
-                                decoration: BoxDecoration(
-                                  color: barColor,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                entry.key,
-                                style: const TextStyle(
-                                    fontSize: 12, color: Colors.black54),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "For This Week",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          height: 240,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: List.generate(7, (i) {
+                              final minutes = minutesPerDay[i];
+                              final hours = (minutes / 60).toStringAsFixed(1);
+                              final barHeight = maxMinutes > 0
+                                  ? (minutes / (maxMinutes)) * 150
+                                  : 2.0; // minimal height for visibility
+                              final dayLabel = _dayLabel(weekDates[i]);
+                              final barColor = _getDayColor(dayLabel);
+                              return Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  // Hours label above the bar
+                                  Text(
+                                    hours,
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.black87),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    width: 26,
+                                    height: barHeight,
+                                    decoration: BoxDecoration(
+                                      color: barColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    dayLabel,
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.black54),
+                                  ),
+                                ],
+                              );
+                            }),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(height: 20),
             ],
@@ -238,5 +279,23 @@ class StatisticPage extends StatelessWidget {
       default:
         return Colors.grey;
     }
+  }
+
+  /// Build list of dates for the current week (Sun → Sat)
+  List<DateTime> _currentWeekDates() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final daysFromSunday = today.weekday % 7; // Sunday → 0
+    final sunday = today.subtract(Duration(days: daysFromSunday));
+    return List.generate(7, (i) {
+      final d = sunday.add(Duration(days: i));
+      return DateTime(d.year, d.month, d.day);
+    });
+  }
+
+  /// Convert date to short day label used by color mapping
+  String _dayLabel(DateTime d) {
+    const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return labels[d.weekday % 7];
   }
 }

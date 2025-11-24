@@ -10,10 +10,40 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  sqflite: ^2.2.8+1
+  path_provider: ^2.0.14
+  supabase_flutter: ^1.0.0
+  connectivity_plus: ^4.0.2
+  uuid: ^4.4.0
+  path: ^1.9.0
+
+  # Firebase for OTP and Google Sign-In
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  google_sign_in: ^6.2.1
+
   
+  # HTTP client for calling secure backend endpoints (Edge Functions)
+  http: ^1.2.0
+
+  # Audio for focus-check alarm
+  audioplayers: ^5.2.1
+  shared_preferences: ^2.2.2
+  
+  # Image picker for profile pictures
+  image_picker: ^1.0.7
+  
+  # Local notifications
+  flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4
 
 
   cupertino_icons: ^1.0.2
+
+dependency_overrides:
+  # Avoid build issues with older Apple Sign-In plugin pulled transitively.
+  # We don't use Apple sign-in, but overriding ensures Android builds succeed.
+  sign_in_with_apple: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -36,7 +66,7 @@ flutter:
     - assets/login page/devicon_google.png
     - assets/Homepage/goal.png
     - assets/Homepage/tiny tomato.png
-    - assets/Homepage/vector.png
+    - assets/Homepage/Vector.png
     - assets/Homepage/calendar icon.png
     - assets/Homepage/Home icon.png
     - assets/Homepage/pomodoro timer icon.png
@@ -48,3 +78,5 @@ flutter:
     - assets/Forgot pass/Group 216.png
     - assets/timer/Group 230.png
     - assets/stats/CHERRY TOMATO LOGO-01 2.png
+    - assets/sounds/alarm.wav
+    - assets/sessiontoomato/minicherry.png

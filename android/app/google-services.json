@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "599161513977",
+    "project_id": "cherrytomato-97964",
+    "storage_bucket": "cherrytomato-97964.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:599161513977:android:2f9649249856eb008bff28",
+        "android_client_info": {
+          "package_name": "com.example.tomatonator"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "599161513977-6eaga91o1iukqra8k0024har761oqvu2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.tomatonator",
+            "certificate_hash": "805c220fcc39007263697d238c8a47ee6953a1d8"
+          }
+        },
+        {
+          "client_id": "599161513977-jq45re4v0fq04k4kcufac5il9cf33m1p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC0PRGqghPCTKKSb5VdCGO21xDrGZYs4Ag"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "599161513977-jq45re4v0fq04k4kcufac5il9cf33m1p.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

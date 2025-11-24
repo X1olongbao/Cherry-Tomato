@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:tomatonator/services/auth_service.dart';
+import 'package:tomatonator/userloginforgot/login_page.dart';
+import 'package:tomatonator/homepage/privacy_security_page.dart';
+import 'package:tomatonator/homepage/edit_profile_page.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  bool notificationsEnabled = true;
-  bool appBlockerEnabled = false;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,7 +32,7 @@ class _ProfilePageState extends State<ProfilePage> {
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () => _handleBack(context),
                     child: const Icon(Icons.arrow_back, color: Colors.black),
                   ),
                   const SizedBox(width: 16),
@@ -75,21 +78,37 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
 
               const SizedBox(height: 12),
-              const Text(
-                "Cherry",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              const Text(
-                "cherrypomo@email.com",
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.black54,
-                ),
-              ),
+              Builder(builder: (context) {
+                final user = AuthService.instance.currentUser;
+                final username = user?.username;
+                // Fallback to email local-part if username missing
+                final emailLocal = user?.email?.split('@').first;
+                final displayName = (username != null && username.isNotEmpty)
+                    ? username
+                    : (emailLocal != null && emailLocal.isNotEmpty)
+                        ? emailLocal
+                        : 'Cherry';
+                final displayEmail = user?.email ?? 'Not logged in';
+                return Column(
+                  children: [
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                    Text(
+                      displayEmail,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                );
+              }),
 
               const SizedBox(height: 36),
 
@@ -106,34 +125,19 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
               const SizedBox(height: 12),
-              _buildListTile(Icons.person_outline, "Edit Profile"),
+              _buildListTile(Icons.person_outline, "Edit Profile", onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const EditProfilePage(),
+                  ),
+                ).then((updated) {
+                  if (updated == true) {
+                    setState(() {}); // Refresh the profile page
+                  }
+                });
+              }),
               const SizedBox(height: 8),
               _buildListTile(Icons.lock_outline, "Privacy"),
-
-              const SizedBox(height: 32),
-
-              // Settings Section
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Setting and Activity",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[800],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSwitchTile(Icons.notifications_none, "Notification",
-                  notificationsEnabled, (val) {
-                setState(() => notificationsEnabled = val);
-              }),
-              const SizedBox(height: 8),
-              _buildSwitchTile(Icons.block, "App Blocker", appBlockerEnabled,
-                  (val) {
-                setState(() => appBlockerEnabled = val);
-              }),
 
               const SizedBox(height: 40), // ✅ extra space before logout
 
@@ -142,7 +146,20 @@ class _ProfilePageState extends State<ProfilePage> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () async {
+                    // Capture Navigator and Messenger before the async gap
+                    final navigator = Navigator.of(context);
+                    try {
+                      await AuthService.instance.signOut();
+                      if (!mounted) return;
+                      navigator.pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                        (route) => false,
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: tomatoRed,
                     shape: RoundedRectangleBorder(
@@ -168,7 +185,18 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildListTile(IconData icon, String title) {
+  void _handleBack(BuildContext context) {
+    if (widget.onBack != null) {
+      widget.onBack!();
+      return;
+    }
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+  }
+
+  Widget _buildListTile(IconData icon, String title, {VoidCallback? onTap}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -191,39 +219,13 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {},
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile(
-      IconData icon, String title, bool value, Function(bool) onChanged) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: Offset(0, 3),
-          )
-        ],
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.black),
-        title: Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
-          ),
-        ),
-        trailing: Switch(
-          value: value,
-          onChanged: onChanged,
-          activeColor: tomatoRed,
-        ),
+        onTap: onTap ?? () {
+          if (title == 'Privacy') {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PrivacySecurityPage()),
+            );
+          }
+        },
       ),
     );
   }

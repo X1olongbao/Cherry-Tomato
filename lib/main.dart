@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'landingpage/landing_page.dart';
+import 'homepage/homepage_app.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'utilities/init.dart';
+import 'utilities/usage_lifecycle_host.dart';
 
 class CherryTomatoApp extends StatelessWidget {
   const CherryTomatoApp({super.key});
@@ -14,9 +18,16 @@ class CherryTomatoApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
       ),
-      home: const LandingPage(),
+      home: Supabase.instance.client.auth.currentUser != null
+          ? const Homepage()
+          : const LandingPage(),
     );
   }
 }
 
-void main() => runApp(const CherryTomatoApp());
+// Ensure backend (Supabase, SQLite, Sync) is initialized before the app starts
+// so that authentication and session storage are ready for UI interactions.
+Future<void> main() async {
+  await initializeBackend();
+  runApp(const UsageLifecycleHost(child: CherryTomatoApp()));
+}

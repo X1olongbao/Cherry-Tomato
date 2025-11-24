@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_page.dart';
+import 'email_otp_verification_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -14,6 +16,8 @@ class _SignUpPageState extends State<SignUpPage> {
   final _usernameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  bool _loading = false; // track ongoing signup
+  String? _error; // last error message
 
   @override
   void initState() {
@@ -29,6 +33,58 @@ class _SignUpPageState extends State<SignUpPage> {
       _usernameCtrl.text.isNotEmpty &&
       _emailCtrl.text.isNotEmpty &&
       _passwordCtrl.text.isNotEmpty;
+
+  // Send OTP via Supabase and navigate to OTP verification.
+  Future<void> _handleSignup() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final email = _emailCtrl.text.trim();
+      final username = _usernameCtrl.text.trim();
+      final password = _passwordCtrl.text;
+
+      // Use Supabase's built-in OTP functionality
+      final supabase = Supabase.instance.client;
+      final exists = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+      if (exists != null) {
+        setState(() => _error = 'Email already in use. Please log in or use a different email.');
+        return;
+      }
+      await supabase.auth.signInWithOtp(
+        email: email,
+        shouldCreateUser: true,
+        data: {
+          'username': username,
+          // Store password temporarily in metadata for later use
+          'temp_password': password,
+        },
+      );
+
+      if (!mounted) return;
+      final ctx = OtpContext(
+        flow: OtpFlow.registration,
+        email: email,
+        username: username,
+        password: password,
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => EmailOtpVerificationPage(otpContext: ctx)),
+      );
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -183,23 +239,48 @@ class _SignUpPageState extends State<SignUpPage> {
 
               const SizedBox(height: 40),
 
-              // Continue button – UI only
+              // Continue button – integrates Supabase signup
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _allFilled ? () {} : null,
+                  onPressed: _allFilled && !_loading ? _handleSignup : null,
                   style: _continueStyle,
-                  child: const Text(
-                    'Continue',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Continue',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ),
 
               const SizedBox(height: 15),
+
+              if (_error != null) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: tomatoRed),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: tomatoRed),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 15),
+              ],
 
               // OR divider
               const Row(

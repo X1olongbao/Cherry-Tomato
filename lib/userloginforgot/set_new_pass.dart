@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'pass_success.dart' as success_page;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utilities/logger.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
 class SetNewPasswordPage extends StatefulWidget {
-  const SetNewPasswordPage({super.key});
+  const SetNewPasswordPage({super.key, required this.userId, required this.email});
+
+  final String userId;
+  final String email;
 
   @override
   State<SetNewPasswordPage> createState() => _SetNewPasswordPageState();
@@ -16,6 +21,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
   bool _show1 = false;
   bool _show2 = false;
   bool _submitted = false;
+  String? _error;
 
   @override
   void initState() {
@@ -35,14 +41,30 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
   bool get _match => _pass1.text == _pass2.text && _pass2.text.isNotEmpty;
   bool get _formValid => _validLength && _match;
 
-  void _submit() {
+  Future<void> _submit() async {
     setState(() => _submitted = true);
     if (!_formValid) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-          builder: (context) => const success_page.PasswordResetSuccessPage()),
-    );
+    try {
+      final client = Supabase.instance.client;
+      
+      // Check if we have an active session (from OTP verification)
+      if (client.auth.currentUser == null) {
+        throw Exception('No active session. Please verify OTP again.');
+      }
+      
+      // Update password using the active session
+      await client.auth.updateUser(UserAttributes(password: _pass1.text));
+      
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+            builder: (context) => const success_page.PasswordResetSuccessPage()),
+      );
+    } catch (e) {
+      Logger.e('Password update failed: $e');
+      setState(() => _error = 'Failed to update password. Please try again.');
+    }
   }
 
   InputDecoration _decoration(
@@ -97,7 +119,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         foregroundColor: Colors.white,
-      ).copyWith(
+  ).copyWith(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (!_formValid) return tomatoRed.withValues(alpha: 0.35);
           return tomatoRed;
@@ -189,6 +211,21 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: tomatoRed),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: tomatoRed),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
