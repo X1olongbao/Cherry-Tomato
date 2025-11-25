@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'landingpage/landing_page.dart';
 import 'homepage/homepage_app.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -10,17 +11,22 @@ class CherryTomatoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Cherry Tomato',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE53935)),
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.white,
+    return ScreenUtilInit(
+      designSize: const Size(390, 844),
+      minTextAdapt: true,
+      splitScreenMode: true,
+      builder: (context, child) => MaterialApp(
+        title: 'Cherry Tomato',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE53935)),
+          useMaterial3: true,
+          scaffoldBackgroundColor: Colors.white,
+        ),
+        home: Supabase.instance.client.auth.currentUser != null
+            ? const Homepage()
+            : const LandingPage(),
       ),
-      home: Supabase.instance.client.auth.currentUser != null
-          ? const Homepage()
-          : const LandingPage(),
     );
   }
 }

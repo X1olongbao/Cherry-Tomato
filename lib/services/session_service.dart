@@ -69,7 +69,7 @@ class SessionService {
     }
 
     // Add a generic in-app notification for each completed Pomodoro
-    if (sessionType == SessionType.pomodoro) {
+    if (sessionType == SessionType.pomodoro && taskCompleted) {
       NotificationService.instance.addPomodoroCompleted(
         taskName: freshTask?.title,
       );
