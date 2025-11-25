@@ -36,6 +36,24 @@ class _NotificationPageState extends State<NotificationPage> {
               color: Colors.black,
               fontWeight: FontWeight.w600,
             )),
+        actions: [
+          ValueListenableBuilder<List<AppNotification>>(
+            valueListenable: NotificationService.instance.notifications,
+            builder: (context, list, _) {
+              final canClear = list.isNotEmpty;
+              return IconButton(
+                icon: const Icon(Icons.cleaning_services_outlined,
+                    color: Colors.black),
+                tooltip: 'Clear all',
+                onPressed: canClear
+                    ? () {
+                        NotificationService.instance.clearAll();
+                      }
+                    : null,
+              );
+            },
+          ),
+        ],
       ),
       body: ValueListenableBuilder<List<AppNotification>>(
         valueListenable: NotificationService.instance.notifications,

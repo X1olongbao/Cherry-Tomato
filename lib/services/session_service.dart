@@ -32,15 +32,20 @@ class SessionService {
       freshTask = await TaskService.instance.getTask(task.id) ?? task;
     }
 
-    if (freshTask != null && manualCompletion) {
-      freshTask = await TaskService.instance.markManualCompletion(freshTask);
-      taskCompleted = true;
-    } else if (freshTask != null) {
-      final progress =
-          await TaskService.instance.applySessionProgress(freshTask, sessionType);
-      if (progress != null) {
-        freshTask = progress.task;
-        taskCompleted = progress.justCompleted;
+    if (freshTask != null) {
+      final singlePomodoroTask =
+          sessionType == SessionType.pomodoro && freshTask.requiredPomodoros <= 1;
+      if (manualCompletion || singlePomodoroTask) {
+        freshTask =
+            await TaskService.instance.markManualCompletion(freshTask);
+        taskCompleted = true;
+      } else {
+        final progress =
+            await TaskService.instance.applySessionProgress(freshTask, sessionType);
+        if (progress != null) {
+          freshTask = progress.task;
+          taskCompleted = progress.justCompleted;
+        }
       }
     }
 
@@ -69,11 +74,11 @@ class SessionService {
     }
 
     // Add a generic in-app notification for each completed Pomodoro
-    if (sessionType == SessionType.pomodoro && taskCompleted) {
+    if (taskCompleted) {
       NotificationService.instance.addPomodoroCompleted(
         taskName: freshTask?.title,
       );
-      // Compute streak from local sessions and notify milestones
+      // Update streaks only after the task is completed and session stored
       try {
         final all = await DatabaseService.instance.getSessions(userId: user?.id);
         final dates = <DateTime>{};
@@ -86,7 +91,11 @@ class SessionService {
         cur = DateTime(cur.year, cur.month, cur.day);
         if (!dates.contains(cur)) {
           final y = cur.subtract(const Duration(days: 1));
-          if (dates.contains(y)) cur = y; else cur = DateTime(1970);
+          if (dates.contains(y)) {
+            cur = y;
+          } else {
+            cur = DateTime(1970);
+          }
         }
         while (dates.contains(cur)) {
           streak++;

@@ -70,6 +70,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
   }
 
   Future<void> _handleChangePassword() async {
+    if (!_passwordsValid) return;
     final result = await Connectivity().checkConnectivity();
     final offline = result == ConnectivityResult.none;
     final supaUser = Supabase.instance.client.auth.currentUser;
@@ -88,8 +89,35 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       return;
     }
     if (_isOAuthLogin) return;
-    final email = Supabase.instance.client.auth.currentUser?.email;
+    final email = supaUser.email;
     if (email == null || email.isEmpty) return;
+
+    final oldPassword = _oldPwdCtrl.text.trim();
+    final newPassword = _newPwdCtrl.text.trim();
+
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: oldPassword,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Incorrect Password'),
+          content: const Text('The old password you entered is incorrect.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     await Supabase.instance.client.auth.signInWithOtp(
       email: email,
       shouldCreateUser: false,
@@ -99,7 +127,11 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       context,
       MaterialPageRoute(
         builder: (_) => EmailOtpVerificationPage(
-          otpContext: OtpContext(flow: OtpFlow.forgotPassword, email: email),
+          otpContext: OtpContext(
+            flow: OtpFlow.changePassword,
+            email: email,
+            password: newPassword,
+          ),
         ),
       ),
     );
@@ -109,6 +141,9 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
   @override
   void initState() {
     super.initState();
+    _oldPwdCtrl.addListener(_onPasswordFieldsChanged);
+    _newPwdCtrl.addListener(_onPasswordFieldsChanged);
+    _confirmPwdCtrl.addListener(_onPasswordFieldsChanged);
     _loadBlockedApps();
     _loadNotificationState();
     _loadAppBlockerState();
@@ -122,6 +157,11 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     _confirmPwdCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onPasswordFieldsChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _persistAppBlockerState() async {

@@ -191,7 +191,16 @@ class _HomepageState extends State<Homepage> {
   List<Widget> get _pages => [
         _buildHomeContent(), // 0 → Home
         CalendarPage(tasks: _tasks), // 1 → Calendar
-        StatisticPage(tasks: _tasks), // 2 → Statistics Page with task data
+        StatisticPage(
+          tasks: _tasks,
+          onShowTasks: () => _onItemTapped(0),
+          onShowHistory: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SessionHistoryPage()),
+            );
+          },
+        ), // 2 → Statistics Page
         ProfilePage(onBack: () => _onItemTapped(0)), // 3 → Profile
       ];
 

@@ -12,9 +12,28 @@ const tomatoRed = Color(0xFFE53935);
 /// Weekly statistics page showing total app usage time per day in hours.
 /// Fetches data from Supabase table `app_usage` and updates dynamically
 /// whenever new usage data is recorded.
-class StatisticPage extends StatelessWidget {
+class StatisticPage extends StatefulWidget {
   final List<Task> tasks;
-  const StatisticPage({super.key, required this.tasks});
+  final VoidCallback onShowTasks;
+  final VoidCallback onShowHistory;
+  const StatisticPage({
+    super.key,
+    required this.tasks,
+    required this.onShowTasks,
+    required this.onShowHistory,
+  });
+
+  @override
+  State<StatisticPage> createState() => _StatisticPageState();
+}
+
+class _StatisticPageState extends State<StatisticPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Ensure latest screen-time data is pulled whenever statistics opens.
+    AppUsageService.instance.refreshCurrentWeek();
+  }
 
   Future<DateTime?> _fetchLastLogin() async {
     try {
@@ -371,8 +390,14 @@ class StatisticPage extends StatelessWidget {
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildStatBox(pending.toString(), "TASK", tomatoRed),
-                      _buildStatBox(completed.toString(), "COMPLETED", Colors.green),
+                      GestureDetector(
+                        onTap: widget.onShowTasks,
+                        child: _buildStatBox(pending.toString(), "TASK", tomatoRed),
+                      ),
+                      GestureDetector(
+                        onTap: widget.onShowHistory,
+                        child: _buildStatBox(completed.toString(), "COMPLETED", Colors.green),
+                      ),
                     ],
                   );
                 },

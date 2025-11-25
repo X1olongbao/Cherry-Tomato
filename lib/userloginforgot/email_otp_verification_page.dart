@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../homepage/homepage_app.dart';
 import 'set_new_pass.dart';
+import 'Login_page.dart';
 import '../services/profile_service.dart';
 import '../utilities/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +10,7 @@ import 'dart:async';
 
 const Color tomatoRed = Color(0xFFE53935);
 
-enum OtpFlow { registration, forgotPassword, login, changeEmail }
+enum OtpFlow { registration, forgotPassword, login, changeEmail, changePassword }
 
 class OtpContext {
   final OtpFlow flow;
@@ -226,6 +227,19 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
             ),
           ),
         );
+      } else if (widget.otpContext.flow == OtpFlow.changePassword) {
+        final newPassword = widget.otpContext.password;
+        if (newPassword == null || newPassword.isEmpty) {
+          throw Exception('Missing new password');
+        }
+        await supabase.auth.updateUser(UserAttributes(password: newPassword));
+        await supabase.auth.signOut();
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+          (route) => false,
+        );
       } else if (widget.otpContext.flow == OtpFlow.login) {
         if (!mounted) return;
         try {
@@ -268,7 +282,8 @@ class _EmailOtpVerificationPageState extends State<EmailOtpVerificationPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isForgot = widget.otpContext.flow == OtpFlow.forgotPassword;
+    final isForgot = widget.otpContext.flow == OtpFlow.forgotPassword ||
+        widget.otpContext.flow == OtpFlow.changePassword;
     
     return Scaffold(
       backgroundColor: Colors.white,

@@ -20,6 +20,10 @@ class NotificationService {
     notifications.value = list;
   }
 
+  void clearAll() {
+    notifications.value = const [];
+  }
+
   /// Convenience: adds a "First Pomodoro" congrats notification.
   void addFirstPomodoroCongrats() {
     add(AppNotification(
