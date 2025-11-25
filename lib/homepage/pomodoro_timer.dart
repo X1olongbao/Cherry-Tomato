@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import '../models/task.dart';
 import '../models/session_type.dart';
 import 'package:tomatonator/services/session_service.dart';
+import 'package:tomatonator/services/task_service.dart';
 import 'package:tomatonator/services/system_notification_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
@@ -80,23 +81,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   bool _tenSecondAlertSent = false;
   static const MethodChannel _blockerChannel = MethodChannel('com.example.tomatonator/installed_apps');
 
-  // Humorous messages to display when a break ends
-  final List<String> breakEndMessages = const [
-    "Time to crush another session! Ready?",
-    "Productivity never sleeps. Continue?",
-    "Don't let the tomato spoil! Next round?",
-    "Keep the streak alive! Next Pomodoro?",
-    "Your brain asked for this break. Now, back to work?",
-    "Pomodoro warriors never quit! Shall we continue?",
-    "Your focus is like cheese… melt it? Just kidding, continue?",
-    "The tomatoes are counting on you! Ready for another?",
-    "Break's over! Let's go, champ!",
-    "Another session awaits. Are you in?"
-  ];
-
   Duration get _total => _durations[_current]!;
   double get _progress => 1 - _remaining.inMilliseconds / _total.inMilliseconds;
-  bool get _breakChipsLocked => _current == SessionType.pomodoro && _isRunning;
 
   @override
   void initState() {
@@ -244,17 +230,6 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     _startTicker();
   }
 
-  void _pauseTimer() {
-    if (!_isRunning) return;
-    _ticker?.cancel();
-    setState(() => _isRunning = false);
-    // Capture remaining at pause and clear end time
-    _endAt = null;
-    _focusCheckTimer?.cancel();
-    _persistTimerState();
-    // Note: App blocker continues running during pause to maintain blocking
-  }
-
   void _stopTimer() {
     _ticker?.cancel();
     _isRunning = false;
@@ -341,24 +316,27 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       ));
     }
     
-    // Advance flow according to requirements
+    // Continuous flow: Pomodoro → Short Break → Pomodoro → Short Break → Pomodoro → Short Break → Pomodoro → Long Break → Cycle Complete
     if (_current == SessionType.pomodoro) {
       // After Pomodoro: play 5-second alarm and automatically start break
       _completedPomodoros++;
+      _playAlarmForFiveSeconds();
       if (_completedPomodoros % 4 == 0) {
+        // After 4th Pomodoro, go to long break
         _switchSession(SessionType.longBreak);
       } else {
+        // After 1st, 2nd, 3rd Pomodoro, go to short break
         _switchSession(SessionType.shortBreak);
       }
-      // Start break countdown automatically
-      _playAlarmForFiveSeconds();
+      // Automatically start break countdown
       _startTimer();
     } else if (_current == SessionType.shortBreak) {
-      // After short break, alert user and prompt to continue
+      // After short break, show focus check dialog before continuing
       _playAlarmForFiveSeconds();
-      _showBreakEndDialog();
+      await _showFocusCheckDialog();
     } else if (_current == SessionType.longBreak) {
-      // Long break completes the cycle automatically
+      // Long break completes the cycle
+      _playAlarmForFiveSeconds();
       _handleCycleCompletion();
     }
   }
@@ -366,7 +344,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   /// Called when the user skips the current session.
   /// Saves the session locally like a normal completion, but stays on the same session type.
   Future<void> _onSkipComplete() async {
-    // Save current session as skipped, then advance to next with feature flow
+    // Save current session as skipped, then advance to next with continuous flow
     final typeBefore = _current;
     try {
       final durationMinutes = _durations[typeBefore]!.inMinutes;
@@ -382,22 +360,24 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       if (mounted) {}
     }
 
-    // Advance with feature behavior
+    // Continuous flow behavior
     if (typeBefore == SessionType.pomodoro) {
       // Skip Pomodoro → go to appropriate break, play 5s alarm, start break
       _completedPomodoros++;
+      _playAlarmForFiveSeconds();
       if (_completedPomodoros % 4 == 0) {
         _switchSession(SessionType.longBreak);
       } else {
         _switchSession(SessionType.shortBreak);
       }
-      _playAlarmForFiveSeconds();
       _startTimer();
     } else if (typeBefore == SessionType.shortBreak) {
-      // Skip short break → same dialog as completion
-      _showBreakEndDialog();
+      // Skip short break → show focus check dialog
+      _playAlarmForFiveSeconds();
+      await _showFocusCheckDialog();
     } else {
-      // Skipping the long break should end the cycle as well
+      // Skipping the long break should end the cycle
+      _playAlarmForFiveSeconds();
       _handleCycleCompletion();
     }
   }
@@ -510,8 +490,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
             suffixText: 'Min',
           );
 
-          Widget numberField(TextEditingController c, {VoidCallback? onTap, double width = 90}) => SizedBox(
-            width: width,
+          Widget numberField(TextEditingController c, {VoidCallback? onTap}) => SizedBox(
+            width: 130, // Fixed width for all modes to prevent UI shifting
             height: 44,
             child: TextField(
               controller: c,
@@ -525,7 +505,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                         onTap: onTap,
                         child: const Icon(Icons.expand_more, size: 18, color: Colors.black54),
                       )
-                    : null,
+                    : const SizedBox(width: 24), // Placeholder to maintain consistent width
               ),
             ),
           );
@@ -590,10 +570,12 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
             contentPadding: const EdgeInsets.fromLTRB(20, 22, 20, 12),
             titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
             title: const Text('Select Mode', style: TextStyle(fontWeight: FontWeight.w700)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            content: SizedBox(
+              width: 320, // Fixed width for consistent dialog size
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 StatefulBuilder(builder: (ctx2, setLocal2) {
                   void step(int delta) {
                     final modes = PresetMode.values;
@@ -676,7 +658,6 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                                 },
                               )
                           : null,
-                      width: editable ? 130 : 90,
                     ),
                   ],
                 ),
@@ -702,7 +683,6 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                                 },
                               )
                           : null,
-                      width: editable ? 130 : 90,
                     ),
                   ],
                 ),
@@ -728,12 +708,12 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                                 },
                               )
                           : null,
-                      width: editable ? 130 : 90,
                     ),
                   ],
                 ),
                 
               ],
+              ),
             ),
             actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             actions: [
@@ -876,6 +856,80 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     _isDialogShowing = false;
   }
 
+  Future<void> _showFocusCheckDialog() async {
+    if (_isDialogShowing) return;
+    _isDialogShowing = true;
+    final message = _focusMessages[_rand.nextInt(_focusMessages.length)];
+    await _startAlarmLoop();
+    if (!mounted) {
+      _isDialogShowing = false;
+      await _stopAlarm();
+      return;
+    }
+    
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.psychology, color: Colors.black87),
+              SizedBox(width: 8),
+              Text('Focus Check', style: TextStyle(fontWeight: FontWeight.w600)),
+            ],
+          ),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _stopAlarm();
+                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                // User not focused - quit session and reset all data
+                _stopTimer();
+                // Reset local state to initial values
+                setState(() {
+                  _current = SessionType.pomodoro;
+                  _remaining = _durations[SessionType.pomodoro]!;
+                  _completedPomodoros = 0;
+                  _isRunning = false;
+                  isSessionActive = false;
+                  _endAt = null;
+                  _resetPreAlerts();
+                });
+                // Clear persisted cache so next time starts fresh
+                _clearTimerCache();
+                if (mounted) {
+                  Navigator.of(context).pop();
+                }
+                _isDialogShowing = false;
+              },
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await _stopAlarm();
+                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                // User is focused - continue to next Pomodoro
+                _switchSession(SessionType.pomodoro);
+                _startTimer();
+                _isDialogShowing = false;
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Yes'),
+            ),
+          ],
+        );
+      },
+    );
+    _isDialogShowing = false;
+  }
+
   String _formatHms(int seconds) {
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
@@ -911,22 +965,22 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
             children: const [
               Icon(Icons.emoji_events, color: Colors.black87),
               SizedBox(width: 8),
-              Text('Cycle Complete', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text('Cycle Complete!', style: TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
           content: const Text(
-              'Amazing focus! You completed the full Pomodoro cycle. Ready to head back and plan the next one?'),
+              'Amazing focus! You completed the full Pomodoro cycle. Grab some water and celebrate this win 🎉'),
           actions: [
             ElevatedButton(
               onPressed: () async {
                 await _stopAlarm();
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
                 if (mounted) {
-                  Navigator.of(context).pop({
-                    'motivational': true,
-                    'message':
-                        'Cycle complete! Grab some water and celebrate this win 🎉',
-                  });
+                  // Mark task as complete if there's a task
+                  if (widget.task != null) {
+                    await _markTaskAsComplete();
+                  }
+                  Navigator.of(context).pop({'cycleComplete': true});
                 }
                 _isDialogShowing = false;
               },
@@ -935,7 +989,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('Finish Session'),
+              child: const Text('Back to Home'),
             ),
           ],
         );
@@ -995,22 +1049,122 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     }
   }
 
+  Future<bool> _onWillPop() async {
+    // If session is running, show confirmation dialog
+    if (_isRunning) {
+      final shouldQuit = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                SizedBox(width: 8),
+                Text('Quit Session?', style: TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            content: const Text(
+              'Your focus session is still running. Are you sure you want to quit? Your progress will be lost.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('No, Continue'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Yes, Quit'),
+              ),
+            ],
+          );
+        },
+      );
+      if (shouldQuit == true) {
+        // User confirmed quit - clear all timer state so they start fresh next time
+        _stopTimer();
+        _clearTimerCache();
+        // Reset local state to initial values
+        setState(() {
+          _current = SessionType.pomodoro;
+          _remaining = _durations[SessionType.pomodoro]!;
+          _completedPomodoros = 0;
+          _isRunning = false;
+          isSessionActive = false;
+          _endAt = null;
+          _resetPreAlerts();
+        });
+      }
+      return shouldQuit ?? false;
+    }
+    return true;
+  }
+
+  void _clearTimerCache() {
+    // Reset the cache to initial state
+    _pomodoroTimerCache.hasData = false;
+    _pomodoroTimerCache.current = SessionType.pomodoro;
+    _pomodoroTimerCache.durations = {
+      SessionType.pomodoro: const Duration(minutes: 25),
+      SessionType.shortBreak: const Duration(minutes: 5),
+      SessionType.longBreak: const Duration(minutes: 15),
+    };
+    _pomodoroTimerCache.presetMode = PresetMode.classic;
+    _pomodoroTimerCache.remaining = const Duration(minutes: 25);
+    _pomodoroTimerCache.endAt = null;
+    _pomodoroTimerCache.completedPomodoros = 0;
+    _pomodoroTimerCache.isRunning = false;
+    _pomodoroTimerCache.isSessionActive = false;
+    _pomodoroTimerCache.oneMinuteAlertSent = false;
+    _pomodoroTimerCache.tenSecondAlertSent = false;
+  }
+
+  Future<void> _markTaskAsComplete() async {
+    if (widget.task == null) return;
+    try {
+      await TaskService.instance.markManualCompletion(widget.task!);
+      Logger.i('Task marked as complete: ${widget.task!.title}');
+    } catch (e) {
+      Logger.e('Failed to mark task as complete: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final canPop = await _onWillPop();
+        if (canPop && mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () async {
+              final canPop = await _onWillPop();
+              if (canPop && mounted) {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          title:
+              const Text('Pomodoro Timer', style: TextStyle(color: Colors.black)),
+          centerTitle: false,
         ),
-        title:
-            const Text('Pomodoro Timer', style: TextStyle(color: Colors.black)),
-        centerTitle: false,
-      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -1036,74 +1190,11 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
           ],
         ),
       ),
+      ),
     );
   }
 
-  /// Shows a break-end dialog with humorous message and Yes/No actions.
-  /// Yes: continue to next Pomodoro.
-  /// No: stop cycle, return to Homepage and show a motivational popup.
-  Future<void> _showBreakEndDialog() async {
-    if (_isDialogShowing) return;
-    _isDialogShowing = true;
-    final message = breakEndMessages[_rand.nextInt(breakEndMessages.length)];
-    if (!mounted) {
-      _isDialogShowing = false;
-      return;
-    }
 
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: const [
-              Icon(Icons.celebration, color: Colors.black87),
-              SizedBox(width: 8),
-              Text('Break Finished', style: TextStyle(fontWeight: FontWeight.w600)),
-            ],
-          ),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                // Stop any audio and close dialog
-                await _stopAlarm();
-                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                // Return to Homepage with motivational payload
-                if (mounted) {
-                  final payload = {
-                    'motivational': true,
-                    'message': 'Nice job taking a pause! You\'ve got this.'
-                  };
-                  Navigator.of(context).pop(payload);
-                }
-                _isDialogShowing = false;
-              },
-              child: const Text('No'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                await _stopAlarm();
-                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                // Continue with next Pomodoro
-                _switchSession(SessionType.pomodoro);
-                _startTimer();
-                _isDialogShowing = false;
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _accent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: const Text('Yes'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   Widget _buildTaskCard() {
     final t = widget.task;
@@ -1182,7 +1273,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: SessionType.values.map((s) {
         final selected = s == _current;
-        final disabled = _breakChipsLocked && s != SessionType.pomodoro;
+        // All chips are now disabled (unclickable) for continuous flow
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: SizedBox(
@@ -1194,16 +1285,14 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                 textAlign: TextAlign.center,
               ),
               selected: selected,
-              onSelected: disabled ? null : (_) => _switchSession(s),
-              selectedColor: disabled ? Colors.grey[400] : _accent,
+              onSelected: null, // Disabled - no manual switching
+              selectedColor: _accent,
               labelStyle: TextStyle(
-                color: selected
-                    ? Colors.white
-                    : (disabled ? Colors.black38 : Colors.black87),
+                color: selected ? Colors.white : Colors.black54,
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
-              backgroundColor: disabled ? Colors.grey[200] : Colors.grey[300],
+              backgroundColor: Colors.grey[300],
               padding: chipPadding,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6)),
@@ -1306,28 +1395,39 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   }
 
   Widget _buildControls() {
-    final playIcon = _isRunning ? Icons.pause : Icons.play_arrow;
+    // Show Start button only when not running, no pause functionality
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _circleButton(icon: Icons.refresh, onTap: _resetTimer, enabled: true),
+        _circleButton(icon: Icons.refresh, onTap: _resetTimer, enabled: !_isRunning),
         const SizedBox(width: 30),
-        GestureDetector(
-          onTap: () => _isRunning ? _pauseTimer() : _startTimer(),
-          child: Container(
+        if (!_isRunning)
+          GestureDetector(
+            onTap: _startTimer,
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: _accent,
+                shape: BoxShape.circle,
+                boxShadow: const [
+                  BoxShadow(
+                      color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
+                ],
+              ),
+              child: const Icon(Icons.play_arrow, size: 40, color: Colors.white),
+            ),
+          )
+        else
+          Container(
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: _accent,
+              color: Colors.grey[400],
               shape: BoxShape.circle,
-              boxShadow: const [
-                BoxShadow(
-                    color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
-              ],
             ),
-            child: Icon(playIcon, size: 40, color: Colors.white),
+            child: const Icon(Icons.lock, size: 32, color: Colors.white),
           ),
-        ),
         const SizedBox(width: 30),
         _circleButton(
             icon: Icons.skip_next, onTap: _skipSession, enabled: _isRunning),
@@ -1337,10 +1437,6 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
 
   Widget _buildTestOverlayButton() {
     return const SizedBox.shrink();
-  }
-
-  Future<void> _showBlockerOverlay() async {
-    return;
   }
 
   Future<void> _startAppBlockerIfConfigured() async {

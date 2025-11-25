@@ -525,20 +525,13 @@ class _HomepageState extends State<Homepage> {
                               ),
                               GestureDetector(
                                 onTap: () async {
-                                  final result = await Navigator.push(
+                                  await Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) =>
                                           PomodoroTimerPage(task: task),
                                     ),
                                   );
-                                  if (result is Map &&
-                                      (result['motivational'] == true)) {
-                                    final msg = (result['message']
-                                            as String?) ??
-                                        'Keep going! Small steps lead to big wins.';
-                                    _showMotivationDialog(msg);
-                                  }
                                 },
                                 child: const Icon(Icons.play_arrow,
                                     color: Colors.red, size: 28),
