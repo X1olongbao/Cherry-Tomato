@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
@@ -359,11 +360,11 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                                 ),
                               )
                             : GridView.builder(
-                                padding: const EdgeInsets.all(16),
-                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                padding: EdgeInsets.all(16.w),
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: 3,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
+                                  crossAxisSpacing: 12.w,
+                                  mainAxisSpacing: 12.h,
                                   childAspectRatio: 1.0,
                                 ),
                                 itemCount: items.length,
@@ -374,7 +375,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                   ),
                   // Footer with selected count and done button
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(16.w),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade50,
                       border: Border(
@@ -784,26 +785,26 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8.h),
                 _helpText('Select which apps to block during Pomodoro sessions. Applied to all sessions.'),
-                const SizedBox(height: 16),
+                SizedBox(height: 16.h),
                 // Selected apps display with integrated plus button
                 Container(
                   width: double.infinity,
-                  constraints: const BoxConstraints(maxHeight: 280), // Fit 3 rows initially, scrollable if more
-                  padding: const EdgeInsets.all(12),
+                  constraints: BoxConstraints(maxHeight: 280.h), // Fit 3 rows initially, scrollable if more
+                  padding: EdgeInsets.all(12.w),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(16.r),
                     border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: GridView.builder(
                           shrinkWrap: true,
                           physics: const AlwaysScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 3,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10.w,
+                            mainAxisSpacing: 10.h,
                             childAspectRatio: 1.0,
                           ),
                           itemCount: _selectedApps.length + 1, // Plus button + all apps (no limit)
@@ -820,26 +821,26 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                                   }
                                 },
                                 child: Container(
-                                  padding: const EdgeInsets.all(6),
+                                  padding: EdgeInsets.all(6.w),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(10.r),
                                     border: Border.all(color: Colors.grey.shade300),
                                   ),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Container(
-                                        width: 48,
-                                        height: 48,
+                                        width: 48.w,
+                                        height: 48.w,
                                         decoration: BoxDecoration(
                                           color: Colors.grey.shade300,
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(10.r),
                                         ),
                                         child: _isScanning
-                                            ? const Padding(
-                                                padding: EdgeInsets.all(12),
-                                                child: CircularProgressIndicator(
+                                            ? Padding(
+                                                padding: EdgeInsets.all(12.w),
+                                                child: const CircularProgressIndicator(
                                                   strokeWidth: 2.5,
                                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.black54),
                                                 ),
@@ -847,19 +848,19 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                                             : Icon(
                                                 Icons.add,
                                                 color: Colors.grey.shade600,
-                                                size: 20,
+                                                size: 20.sp,
                                               ),
                                       ),
-                                      const SizedBox(height: 4),
+                                      SizedBox(height: 4.h),
                                       SizedBox(
-                                        width: 70,
+                                        width: 70.w,
                                         child: Text(
                                           'Add',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
-                                            fontSize: 10,
+                                            fontSize: 10.sp,
                                             color: Colors.grey.shade700,
                                           ),
                                         ),
@@ -891,10 +892,10 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                                 _saveBlockedApps();
                               },
                               child: Container(
-                                padding: const EdgeInsets.all(6),
+                                padding: EdgeInsets.all(6.w),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(10.r),
                                   border: Border.all(color: Colors.grey.shade300),
                                 ),
                                 child: Column(
@@ -903,52 +904,52 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                                     Stack(
                                       children: [
                                         Container(
-                                          width: 48,
-                                          height: 48,
+                                          width: 48.w,
+                                          height: 48.w,
                                           decoration: BoxDecoration(
                                             color: Colors.grey.shade100,
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius: BorderRadius.circular(10.r),
                                           ),
                                           child: iconBytes != null
                                               ? ClipRRect(
-                                                  borderRadius: BorderRadius.circular(10),
+                                                  borderRadius: BorderRadius.circular(10.r),
                                                   child: Image.memory(
                                                     iconBytes,
-                                                    width: 48,
-                                                    height: 48,
+                                                    width: 48.w,
+                                                    height: 48.w,
                                                     fit: BoxFit.cover,
                                                   ),
                                                 )
-                                              : const Icon(Icons.apps, color: Colors.black54, size: 18),
+                                              : Icon(Icons.apps, color: Colors.black54, size: 18.sp),
                                         ),
                                         Positioned(
-                                          top: -3,
-                                          right: -3,
+                                          top: -3.h,
+                                          right: -3.w,
                                           child: Container(
-                                            width: 16,
-                                            height: 16,
+                                            width: 16.w,
+                                            height: 16.w,
                                             decoration: const BoxDecoration(
                                               color: Colors.red,
                                               shape: BoxShape.circle,
                                             ),
-                                            child: const Icon(
+                                            child: Icon(
                                               Icons.close,
-                                              size: 9,
+                                              size: 9.sp,
                                               color: Colors.white,
                                             ),
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
+                                    SizedBox(height: 4.h),
                                     SizedBox(
-                                      width: 70,
+                                      width: 70.w,
                                       child: Text(
                                         info.name,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         textAlign: TextAlign.center,
-                                        style: const TextStyle(fontSize: 10),
+                                        style: TextStyle(fontSize: 10.sp),
                                       ),
                                     ),
                                   ],
