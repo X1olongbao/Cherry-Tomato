@@ -1,165 +1,161 @@
 package com.example.tomatonator
 
-import android.app.AppOpsManager
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import android.net.Uri
+import android.app.AppOpsManager
+import android.content.Context
+import android.content.Intent
 import android.os.Build
-import android.os.Bundle
 import android.provider.Settings
-import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.io.ByteArrayOutputStream
-import java.util.Locale
 
 class MainActivity : FlutterActivity() {
-
-    companion object {
-        private const val CHANNEL = "com.example.tomatonator/installed_apps"
-    }
+    private val channelName = "com.example.tomatonator/installed_apps"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "getInstalledApps" -> result.success(getInstalledApps())
-                    "getAppIcon" -> {
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getInstalledApps" -> {
+                    try {
+                        val apps = getLaunchableApps()
+                        result.success(apps)
+                    } catch (e: Exception) {
+                        result.error("ERR_APPS", e.message, null)
+                    }
+                }
+                "getAppIcon" -> {
+                    try {
                         val pkg = call.argument<String>("package")
                         if (pkg.isNullOrEmpty()) {
-                            result.error("INVALID_ARGS", "package is required", null)
+                            result.error("ERR_ARGS", "package is required", null)
                         } else {
-                            result.success(getAppIconBytes(pkg))
+                            val bytes = getAppIconBytes(pkg)
+                            if (bytes != null) result.success(bytes) else result.success(null)
                         }
+                    } catch (e: Exception) {
+                        result.error("ERR_ICON", e.message, null)
                     }
-                    "isUsageAccessGranted" -> result.success(isUsageAccessGranted())
-                    "isOverlayPermissionGranted" -> result.success(Settings.canDrawOverlays(this))
-                    "openUsageAccessSettings" -> {
-                        openUsageAccessSettings()
-                        result.success(null)
-                    }
-                    "openOverlaySettings" -> {
-                        openOverlaySettings()
-                        result.success(null)
-                    }
-                    "startAppBlocker" -> {
-                        val packages = call.argument<List<String>>("packages") ?: emptyList()
-                        val dismissSeconds =
-                            call.argument<Int>("dismissDurationSeconds") ?: 30
-                        startAppBlocker(packages, dismissSeconds)
-                        result.success(null)
-                    }
-                    "stopAppBlocker" -> {
-                        stopAppBlocker()
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
                 }
-            }
-    }
-
-    private fun getInstalledApps(): List<Map<String, Any>> {
-        val pm = packageManager
-        val apps = mutableListOf<Map<String, Any>>()
-        val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-        packages.forEach { info ->
-            val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-            if (!isSystem) {
-                val name = pm.getApplicationLabel(info).toString()
-                apps.add(
-                    mapOf(
-                        "name" to name,
-                        "package" to info.packageName
-                    )
-                )
+                "isUsageAccessGranted" -> {
+                    result.success(isUsageAccessGranted())
+                }
+                "openUsageAccessSettings" -> {
+                    try {
+                        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("ERR_SETTINGS", e.message, null)
+                    }
+                }
+                "isOverlayPermissionGranted" -> {
+                    result.success(Settings.canDrawOverlays(this))
+                }
+                "openOverlaySettings" -> {
+                    try {
+                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                            data = android.net.Uri.parse("package:$packageName")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("ERR_SETTINGS", e.message, null)
+                    }
+                }
+                "startAppBlocker" -> {
+                    try {
+                        val pkgs = (call.argument<List<String>>("packages") ?: emptyList())
+                        val dismissSecs = call.argument<Int>("dismissDurationSeconds") ?: AppBlockerService.DISMISS_DURATION
+                        val intent = Intent(this, AppBlockerService::class.java)
+                        intent.putStringArrayListExtra(AppBlockerService.EXTRA_BLOCKED_PACKAGES, ArrayList(pkgs))
+                        intent.putExtra(AppBlockerService.EXTRA_DISMISS_DURATION, dismissSecs)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            ContextCompat.startForegroundService(this, intent)
+                        } else {
+                            startService(intent)
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("ERR_SERVICE", e.message, null)
+                    }
+                }
+                "stopAppBlocker" -> {
+                    try {
+                        val intent = Intent(this, AppBlockerService::class.java)
+                        stopService(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("ERR_SERVICE", e.message, null)
+                    }
+                }
+                else -> result.notImplemented()
             }
         }
-        return apps.sortedBy { it["name"].toString().lowercase(Locale.getDefault()) }
+    }
+
+    private fun getLaunchableApps(): List<Map<String, String>> {
+        val pm: PackageManager = applicationContext.packageManager
+        val intent = Intent(Intent.ACTION_MAIN, null)
+        intent.addCategory(Intent.CATEGORY_LAUNCHER)
+        val resolveInfos = pm.queryIntentActivities(intent, 0)
+
+        val seen = HashSet<String>()
+        val list = ArrayList<Map<String, String>>()
+
+        for (ri in resolveInfos) {
+            val pkg = ri.activityInfo.packageName ?: continue
+            if (seen.contains(pkg)) continue
+            seen.add(pkg)
+            val appName = ri.loadLabel(pm)?.toString() ?: pkg
+            val map = hashMapOf(
+                "name" to appName,
+                "package" to pkg
+            )
+            list.add(map)
+        }
+        return list.sortedBy { it["name"]?.lowercase() ?: "" }
+    }
+
+    private fun isUsageAccessGranted(): Boolean {
+        return try {
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
+            mode == AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun getAppIconBytes(packageName: String): ByteArray? {
         return try {
-            val drawable = packageManager.getApplicationIcon(packageName)
-            val width = drawable.intrinsicWidth.coerceAtLeast(64)
-            val height = drawable.intrinsicHeight.coerceAtLeast(64)
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            drawable.setBounds(0, 0, width, height)
-            drawable.draw(canvas)
-            ByteArrayOutputStream().apply {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, this)
-            }.toByteArray()
-        } catch (_: Exception) {
+            val pm = applicationContext.packageManager
+            val drawable: Drawable = pm.getApplicationIcon(packageName)
+            val bitmap: Bitmap = if (drawable is BitmapDrawable) {
+                drawable.bitmap
+            } else {
+                val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
+                val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
+                val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bmp
+            }
+            val stream = java.io.ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            stream.toByteArray()
+        } catch (e: Exception) {
             null
         }
-    }
-
-    private fun isUsageAccessGranted(): Boolean {
-        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                android.os.Process.myUid(),
-                packageName
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                android.os.Process.myUid(),
-                packageName
-            )
-        }
-        return mode == AppOpsManager.MODE_ALLOWED
-    }
-
-    private fun openUsageAccessSettings() {
-        try {
-            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-        } catch (_: ActivityNotFoundException) {
-            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:$packageName")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-        }
-    }
-
-    private fun openOverlaySettings() {
-        try {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                data = Uri.parse("package:$packageName")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun startAppBlocker(blockedPackages: List<String>, dismissSeconds: Int) {
-        val intent = Intent(this, AppBlockerService::class.java).apply {
-            putStringArrayListExtra(
-                AppBlockerService.EXTRA_BLOCKED_PACKAGES,
-                ArrayList(blockedPackages)
-            )
-            putExtra(AppBlockerService.EXTRA_DISMISS_SECONDS, dismissSeconds)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-    }
-
-    private fun stopAppBlocker() {
-        stopService(Intent(this, AppBlockerService::class.java))
     }
 }

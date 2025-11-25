@@ -4,167 +4,360 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.app.usage.UsageEvents
-import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
+import android.graphics.Color
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
-import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.LinearLayout
+import android.widget.ImageView
+import android.graphics.drawable.GradientDrawable
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStats
+import android.app.usage.UsageStatsManager
 import androidx.core.app.NotificationCompat
-import java.util.Locale
+import android.util.Log
+import java.util.Timer
+import java.util.TimerTask
 
 class AppBlockerService : Service() {
-
     companion object {
+        const val CHANNEL_ID = "tomatonator_app_blocker"
+        const val NOTIFICATION_ID = 1001
         const val EXTRA_BLOCKED_PACKAGES = "blocked_packages"
-        const val EXTRA_DISMISS_SECONDS = "dismiss_seconds"
-        private const val CHANNEL_ID = "app_blocker_channel"
-        private const val NOTIFICATION_ID = 42
-        private const val POLL_INTERVAL_MS = 1500L
+        const val EXTRA_DISMISS_DURATION = "dismiss_duration_seconds"
+        const val DISMISS_DURATION = 30
     }
-
-    private val handler = Handler(Looper.getMainLooper())
-    private lateinit var usageStatsManager: UsageStatsManager
-    private lateinit var windowManager: WindowManager
 
     private var blockedPackages: Set<String> = emptySet()
-    private var dismissSeconds: Int = 30
+    private var dismissDurationSeconds: Int = DISMISS_DURATION
+    private var dismissEndAt: Long? = null
+    private var timer: Timer? = null
+    private var dismissTimer: Timer? = null
+    private var wm: WindowManager? = null
     private var overlayView: View? = null
-    private var overlayVisible = false
-    private var lastForegroundApp: String? = null
-
-    private val pollRunnable = object : Runnable {
-        override fun run() {
-            val currentApp = getForegroundApp()
-            val shouldBlock = currentApp != null &&
-                blockedPackages.any { pkg -> currentApp.equals(pkg, ignoreCase = true) }
-            if (shouldBlock) {
-                showOverlay(currentApp!!)
-            } else {
-                hideOverlay()
-            }
-            handler.postDelayed(this, POLL_INTERVAL_MS)
-        }
-    }
 
     override fun onCreate() {
         super.onCreate()
-        usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
+        Log.d("AppBlockerService", "Service created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val packages = intent?.getStringArrayListExtra(EXTRA_BLOCKED_PACKAGES)
-        blockedPackages = packages?.map { it.lowercase(Locale.getDefault()) }?.toSet() ?: emptySet()
-        dismissSeconds = intent?.getIntExtra(EXTRA_DISMISS_SECONDS, 30) ?: 30
+        val list = intent?.getStringArrayListExtra(EXTRA_BLOCKED_PACKAGES) ?: arrayListOf()
+        blockedPackages = list.toSet()
+        val provided = intent?.getIntExtra(EXTRA_DISMISS_DURATION, DISMISS_DURATION) ?: DISMISS_DURATION
+        dismissDurationSeconds = if (provided > 0) provided else DISMISS_DURATION
+        dismissEndAt = System.currentTimeMillis() + dismissDurationSeconds * 1000L
+        Log.d("AppBlockerService", "Started with ${blockedPackages.size} blocked packages: $blockedPackages, dismiss in ${dismissDurationSeconds}s")
         startForeground(NOTIFICATION_ID, buildNotification())
-        handler.post(pollRunnable)
+        startMonitoring()
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(pollRunnable)
-        hideOverlay()
+        stopMonitoring()
+        cancelDismissTimer()
+        removeOverlay()
+        Log.d("AppBlockerService", "Service destroyed")
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun buildNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("App blocker active")
-            .setContentText("Distracting apps are temporarily blocked.")
-            .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-    }
-
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(NotificationManager::class.java)
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "App Blocker",
-                NotificationManager.IMPORTANCE_LOW
-            )
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = NotificationChannel(CHANNEL_ID, "App Blocker", NotificationManager.IMPORTANCE_LOW)
             nm.createNotificationChannel(channel)
         }
     }
 
-    private fun showOverlay(currentApp: String) {
-        if (overlayVisible) return
+    private fun buildNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Cherry Tomato App Blocker")
+            .setContentText("Monitoring foreground apps to block distractions")
+            .setSmallIcon(android.R.drawable.stat_notify_more)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun startMonitoring() {
+        stopMonitoring()
+        Log.d("AppBlockerService", "Start monitoring")
+        // Immediately check once to catch apps already in foreground when service starts
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try {
+                val top = getTopAppPackage()
+                if (top != null && blockedPackages.contains(top)) {
+                    showOverlay()
+                    Log.d("AppBlockerService", "Initial overlay shown for $top")
+                }
+            } catch (ex: Exception) { Log.w("AppBlockerService", "Initial check failed: ${ex.message}") }
+        }, 200) // Small delay to ensure service is ready
+        
+        timer = Timer()
+        // Check more frequently (every 500ms) for better responsiveness
+        timer?.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                try {
+                    val top = getTopAppPackage()
+                    if (top != null && blockedPackages.contains(top)) {
+                        // Show overlay - must run on main thread
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            showOverlay()
+                            Log.d("AppBlockerService", "Overlay shown for $top")
+                        }
+                    } else {
+                        // Only remove if we're showing overlay for a different app
+                        if (overlayView != null && top != null && !blockedPackages.contains(top)) {
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                removeOverlay()
+                                Log.d("AppBlockerService", "Overlay removed; current $top is not blocked")
+                            }
+                        }
+                    }
+                } catch (ex: Exception) { Log.w("AppBlockerService", "Monitor loop error: ${ex.message}") }
+            }
+        }, 500, 500) // Check every 500ms for faster detection
+    }
+
+    private fun stopMonitoring() {
+        timer?.cancel()
+        timer = null
+        Log.d("AppBlockerService", "Stop monitoring")
+    }
+
+    private fun getTopAppPackage(): String? {
+        try {
+            val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val now = System.currentTimeMillis()
+            
+            // Method 1: Check current foreground app using queryUsageStats
+            // This gives us the most recently used apps
+            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_BEST, now - 10000, now)
+            if (stats != null && stats.isNotEmpty()) {
+                // Sort by last time used (most recent first)
+                val sortedStats = stats.sortedByDescending { it.lastTimeUsed }
+                if (sortedStats.isNotEmpty()) {
+                    val topApp = sortedStats[0]
+                    val timeSinceLastUsed = now - topApp.lastTimeUsed
+                    // Only return if it was used very recently (within last 2 seconds)
+                    if (timeSinceLastUsed < 2000) {
+                        return topApp.packageName
+                    } else {
+                        Log.v("AppBlockerService", "Top app ${topApp.packageName} last used ${timeSinceLastUsed}ms ago; ignoring")
+                    }
+                }
+            }
+            
+            // Method 2: Fallback to events (for immediate detection)
+            val events = usm.queryEvents(now - 3000, now)
+            val event = UsageEvents.Event()
+            var lastPkg: String? = null
+            var lastEventTime = 0L
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
+                    event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+                    if (event.timeStamp > lastEventTime) {
+                        lastEventTime = event.timeStamp
+                        lastPkg = event.packageName
+                    }
+                }
+            }
+            
+            Log.v("AppBlockerService", "Fallback detected top app: $lastPkg")
+            return lastPkg
+        } catch (ex: Exception) {
+            Log.e("AppBlockerService", "getTopAppPackage failed: ${ex.message}")
+            return null
+        }
+    }
+
+    private fun showOverlay() {
         if (!Settings.canDrawOverlays(this)) {
-            stopSelf()
+            Log.w("AppBlockerService", "Overlay permission missing")
             return
         }
-        val inflater = LayoutInflater.from(this)
-        overlayView = inflater.inflate(R.layout.overlay_blocker, null).apply {
-            val message = findViewById<TextView>(R.id.blockerMessage)
-            message.text = "Stay focused! $currentApp is blocked."
-            background = GradientDrawable().apply {
-                setColor(0xCC000000.toInt())
-                cornerRadius = 0f
-            }
+        if (overlayView != null) {
+            Log.v("AppBlockerService", "Overlay already visible")
+            return
         }
-        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
+
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            layoutType,
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.CENTER
-        }
-        windowManager.addView(overlayView, params)
-        overlayVisible = true
-    }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            android.graphics.PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.CENTER
 
-    private fun hideOverlay() {
-        if (overlayVisible && overlayView != null) {
-            windowManager.removeView(overlayView)
+        val root = FrameLayout(this)
+        root.setBackgroundColor(Color.argb(220, 0, 0, 0))
+
+        val container = LinearLayout(this)
+        container.orientation = LinearLayout.VERTICAL
+        container.gravity = Gravity.CENTER_HORIZONTAL
+        container.setPadding(48, 40, 48, 32)
+
+        val cardBg = GradientDrawable()
+        cardBg.shape = GradientDrawable.RECTANGLE
+        cardBg.setColor(Color.WHITE)
+        cardBg.cornerRadius = 24f
+        cardBg.setStroke(2, Color.argb(255, 229, 57, 53))
+        container.background = cardBg
+        container.elevation = 16f
+
+        val containerParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        )
+        containerParams.gravity = Gravity.CENTER
+
+        val icon = ImageView(this)
+        icon.setImageResource(android.R.drawable.ic_dialog_alert)
+        icon.setColorFilter(Color.argb(255, 229, 57, 53))
+        val iconLp = LinearLayout.LayoutParams(96, 96)
+
+        val title = TextView(this)
+        title.text = "App Blocked During Focus"
+        title.setTextColor(Color.argb(255, 33, 33, 33))
+        title.textSize = 20f
+        title.setTypeface(null, android.graphics.Typeface.BOLD)
+        val titleLp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        titleLp.topMargin = 16
+
+        val subtitle = TextView(this)
+        subtitle.text = "Stay focused. Finish your Pomodoro session first."
+        subtitle.setTextColor(Color.argb(255, 100, 100, 100))
+        subtitle.textSize = 14f
+        val subLp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        subLp.topMargin = 8
+
+        val countdownText = TextView(this)
+        val remainingSecInitial = ((dismissEndAt ?: System.currentTimeMillis()) - System.currentTimeMillis()).coerceAtLeast(0L) / 1000L
+        countdownText.text = "Dismissing in ${formatHms(remainingSecInitial.toInt())}"
+        countdownText.setTextColor(Color.argb(255, 150, 150, 150))
+        countdownText.textSize = 12f
+        val countLp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        countLp.topMargin = 16
+
+        val button = Button(this)
+        button.text = "Go Back to Focus"
+        button.setTextColor(Color.WHITE)
+        button.textSize = 16f
+        val btnBg = GradientDrawable()
+        btnBg.shape = GradientDrawable.RECTANGLE
+        btnBg.setColor(Color.argb(255, 229, 57, 53))
+        btnBg.cornerRadius = 16f
+        button.background = btnBg
+        val btnLp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        btnLp.topMargin = 20
+
+        button.setOnClickListener {
+            val home = Intent(Intent.ACTION_MAIN)
+            home.addCategory(Intent.CATEGORY_HOME)
+            home.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(home)
+            removeOverlay()
+        }
+
+        container.addView(icon, iconLp)
+        container.addView(title, titleLp)
+        container.addView(subtitle, subLp)
+        container.addView(countdownText, countLp)
+        container.addView(button, btnLp)
+        root.addView(container, containerParams)
+
+        overlayView = root
+        try {
+            wm?.addView(overlayView, params)
+            // Start countdown and auto-dismiss
+            startDismissTimer(countdownText)
+            Log.d("AppBlockerService", "Overlay added")
+        } catch (ex: Exception) {
             overlayView = null
-            overlayVisible = false
+            Log.e("AppBlockerService", "Failed to add overlay: ${ex.message}")
         }
     }
-
-    private fun getForegroundApp(): String? {
-        val end = System.currentTimeMillis()
-        val begin = end - 60_000
-        val usageEvents = usageStatsManager.queryEvents(begin, end)
-        var latestEvent: UsageEvents.Event? = null
-        val event = UsageEvents.Event()
-        while (usageEvents.hasNextEvent()) {
-            usageEvents.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                if (latestEvent == null || event.timeStamp > latestEvent!!.timeStamp) {
-                    latestEvent = UsageEvents.Event(event)
+    
+    private fun startDismissTimer(countdownText: TextView) {
+        cancelDismissTimer()
+        dismissTimer = Timer()
+        dismissTimer?.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                val now = System.currentTimeMillis()
+                val endAt = dismissEndAt ?: now
+                val remainingMs = endAt - now
+                val remaining = if (remainingMs > 0) (remainingMs / 1000L).toInt() else 0
+                if (remaining > 0) {
+                    // Update countdown text on main thread
+                    overlayView?.post {
+                        countdownText.text = "Dismissing in ${formatHms(remaining)}"
+                    }
+                } else {
+                    // Auto-dismiss
+                    overlayView?.post {
+                        removeOverlay()
+                    }
+                    Log.d("AppBlockerService", "Overlay auto-dismissed")
+                    cancel()
                 }
             }
+        }, 1000, 1000)
+        Log.d("AppBlockerService", "Dismiss timer started")
+    }
+
+    private fun formatHms(seconds: Int): String {
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val s = seconds % 60
+        return when {
+            h > 0 -> "${h}h ${m}m ${s}s"
+            m > 0 -> "${m}m ${s}s"
+            else -> "${s}s"
         }
-        val pkg = latestEvent?.packageName
-        if (pkg != null && pkg != lastForegroundApp) {
-            lastForegroundApp = pkg
+    }
+    
+    private fun cancelDismissTimer() {
+        dismissTimer?.cancel()
+        dismissTimer = null
+        Log.v("AppBlockerService", "Dismiss timer cancelled")
+    }
+
+    private fun removeOverlay() {
+        cancelDismissTimer()
+        overlayView?.let {
+            try { wm?.removeView(it) } catch (_: Exception) {}
         }
-        return pkg
+        overlayView = null
+        Log.d("AppBlockerService", "Overlay removed")
     }
 }
