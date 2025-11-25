@@ -84,24 +84,48 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
       _title.text = task.title;
       if (task.dueAt != null) {
         final due = DateTime.fromMillisecondsSinceEpoch(task.dueAt!);
-        _date.text = "${_months[due.month - 1]} ${due.day}, ${due.year}";
-        final hour12 = due.hour == 0
-            ? 12
-            : due.hour > 12
-                ? due.hour - 12
-                : due.hour;
-        _hour = hour12.toString().padLeft(2, '0');
-        _minute = due.minute.toString().padLeft(2, '0');
-        _period = due.hour >= 12 ? 'PM' : 'AM';
-        _timeSelected = true;
+        _setDateText(due);
+        _applyTime(due);
       }
       _priority = priorityToString(task.priority);
       _subtasks
         ..clear()
         ..addAll(task.subtasks
             .map((s) => {"id": s.id, "text": s.text, "done": s.done}));
+    } else {
+      final now = DateTime.now();
+      _setDateText(now);
+      _applyTime(now);
     }
   }
+  void _applyTime(DateTime source) {
+    final hour = source.hour == 0
+        ? 12
+        : source.hour > 12
+            ? source.hour - 12
+            : source.hour;
+    _hour = hour.toString().padLeft(2, '0');
+    _minute = source.minute.toString().padLeft(2, '0');
+    _period = source.hour >= 12 ? 'PM' : 'AM';
+    _timeSelected = true;
+  }
+
+  void _setDateText(DateTime date) {
+    _date.text = "${_months[date.month - 1]} ${date.day}, ${date.year}";
+  }
+
+  DateTime? _selectedDateOnly() {
+    if (_date.text.isEmpty) return null;
+    final cleaned = _date.text.replaceAll(',', '');
+    final parts = cleaned.split(' ');
+    if (parts.length < 3) return null;
+    final monthIndex = _months.indexWhere((element) => element == parts[0]);
+    if (monthIndex == -1) return null;
+    final day = int.tryParse(parts[1]) ?? DateTime.now().day;
+    final year = int.tryParse(parts[2]) ?? DateTime.now().year;
+    return DateTime(year, monthIndex + 1, day);
+  }
+
 
   @override
   void dispose() {
@@ -214,16 +238,24 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
       ),
       style: const TextStyle(color: Colors.black, fontSize: 14),
       onTap: () async {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final currentDate = _selectedDateOnly();
+        final initialDate = (currentDate != null && !currentDate.isBefore(today))
+            ? currentDate
+            : today;
         final picked = await showDatePicker(
           context: context,
-          initialDate: DateTime.now(),
-          firstDate: DateTime(2000),
+          initialDate: initialDate,
+          firstDate: today,
           lastDate: DateTime(2100),
         );
         if (picked != null) {
           setState(() {
-            _date.text =
-                "${_months[picked.month - 1]} ${picked.day}, ${picked.year}";
+            _setDateText(picked);
+            if (picked.isAtSameMomentAs(today)) {
+              _applyTime(DateTime.now());
+            }
           });
         }
       },
@@ -344,11 +376,25 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
           ),
           ElevatedButton(
             onPressed: () {
+              final selectedDate = _selectedDateOnly() ?? DateTime.now();
+              final normalizedSelected =
+                  DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+              final now = DateTime.now();
+              final normalizedNow = DateTime(now.year, now.month, now.day);
+              int hour24 = localHour % 12;
+              if (localPeriodIdx == 1) hour24 += 12;
+              final candidate = DateTime(
+                  normalizedSelected.year, normalizedSelected.month, normalizedSelected.day, hour24, localMinute);
+              DateTime result = candidate;
+              if (!normalizedSelected.isAfter(normalizedNow) && candidate.isBefore(now)) {
+                result = now;
+                _setDateText(now);
+              }
+              if (_date.text.isEmpty) {
+                _setDateText(result);
+              }
               setState(() {
-                _hour = localHour.toString().padLeft(2, '0');
-                _minute = localMinute.toString().padLeft(2, '0');
-                _period = localPeriodIdx == 0 ? 'AM' : 'PM';
-                _timeSelected = true;
+                _applyTime(result);
               });
               Navigator.of(ctx).pop();
             },

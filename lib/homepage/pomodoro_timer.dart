@@ -25,6 +25,26 @@ class PomodoroTimerPage extends StatefulWidget {
 
 enum PresetMode { classic, longStudy, quickTask, custom }
 
+class _PersistentTimerState {
+  SessionType current = SessionType.pomodoro;
+  Map<SessionType, Duration> durations = {
+    SessionType.pomodoro: const Duration(minutes: 25),
+    SessionType.shortBreak: const Duration(minutes: 5),
+    SessionType.longBreak: const Duration(minutes: 15),
+  };
+  PresetMode presetMode = PresetMode.classic;
+  Duration remaining = const Duration(minutes: 25);
+  DateTime? endAt;
+  int completedPomodoros = 0;
+  bool isRunning = false;
+  bool isSessionActive = false;
+  bool oneMinuteAlertSent = false;
+  bool tenSecondAlertSent = false;
+  bool hasData = false;
+}
+
+final _pomodoroTimerCache = _PersistentTimerState();
+
 class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   SessionType _current = SessionType.pomodoro;
   Map<SessionType, Duration> _durations = {
@@ -56,6 +76,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   final math.Random _rand = math.Random();
   AudioPlayer? _alarmPlayer;
   bool _isAlarmPlaying = false;
+  bool _oneMinuteAlertSent = false;
+  bool _tenSecondAlertSent = false;
   static const MethodChannel _blockerChannel = MethodChannel('com.example.tomatonator/installed_apps');
 
   // Humorous messages to display when a break ends
@@ -74,21 +96,104 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
 
   Duration get _total => _durations[_current]!;
   double get _progress => 1 - _remaining.inMilliseconds / _total.inMilliseconds;
+  bool get _breakChipsLocked => _current == SessionType.pomodoro && _isRunning;
 
   @override
   void initState() {
     super.initState();
-    _remaining = _total;
+    _restoreTimerState();
   }
 
   @override
   void dispose() {
+    _persistTimerState();
     _ticker?.cancel();
     _focusCheckTimer?.cancel();
     _stopAlarm();
-    // Stop app blocker when leaving the timer page
-    unawaited(_stopAppBlocker());
+    if (!_isRunning || _current != SessionType.pomodoro) {
+      unawaited(_stopAppBlocker());
+    }
     super.dispose();
+  }
+
+  void _restoreTimerState() {
+    if (!_pomodoroTimerCache.hasData) {
+      _remaining = _total;
+      _resetPreAlerts();
+      return;
+    }
+    _current = _pomodoroTimerCache.current;
+    _durations = Map<SessionType, Duration>.from(_pomodoroTimerCache.durations);
+    _presetMode = _pomodoroTimerCache.presetMode;
+    _remaining = _pomodoroTimerCache.remaining;
+    _endAt = _pomodoroTimerCache.endAt;
+    _completedPomodoros = _pomodoroTimerCache.completedPomodoros;
+    _isRunning = _pomodoroTimerCache.isRunning;
+    isSessionActive = _pomodoroTimerCache.isSessionActive;
+    _oneMinuteAlertSent = _pomodoroTimerCache.oneMinuteAlertSent;
+    _tenSecondAlertSent = _pomodoroTimerCache.tenSecondAlertSent;
+    _syncRemainingWithEnd();
+    if (_isRunning && _endAt != null && _remaining > Duration.zero) {
+      _scheduleFocusCheck();
+      _startTicker();
+    }
+  }
+
+  void _syncRemainingWithEnd() {
+    if (_endAt == null) return;
+    final diff = _endAt!.difference(DateTime.now());
+    if (diff.isNegative) {
+      _remaining = Duration.zero;
+      _oneMinuteAlertSent = true;
+      _tenSecondAlertSent = true;
+      if (_isRunning) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _stopTimer();
+          unawaited(_onComplete());
+        });
+      }
+    } else {
+      _remaining = diff;
+      if (_remaining <= const Duration(minutes: 1)) {
+        _oneMinuteAlertSent = true;
+      }
+      if (_remaining <= const Duration(seconds: 10)) {
+        _tenSecondAlertSent = true;
+      }
+    }
+  }
+
+  void _persistTimerState() {
+    _pomodoroTimerCache
+      ..current = _current
+      ..durations = Map<SessionType, Duration>.from(_durations)
+      ..presetMode = _presetMode
+      ..remaining = _remaining
+      ..endAt = _endAt
+      ..completedPomodoros = _completedPomodoros
+      ..isRunning = _isRunning
+      ..isSessionActive = isSessionActive
+      ..oneMinuteAlertSent = _oneMinuteAlertSent
+      ..tenSecondAlertSent = _tenSecondAlertSent
+      ..hasData = true;
+  }
+
+  void _startTicker() {
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted || _endAt == null) return;
+      setState(() {
+        final diff = _endAt!.difference(DateTime.now());
+        _remaining = diff.isNegative ? Duration.zero : diff;
+        _maybeTriggerPreAlerts();
+        if (_remaining <= Duration.zero) {
+          _remaining = Duration.zero;
+          _stopTimer();
+          unawaited(_onComplete());
+        }
+      });
+    });
   }
 
   void _switchSession(SessionType type) {
@@ -97,7 +202,9 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       _remaining = _durations[type]!;
       _stopTimer();
       _endAt = null;
+      _resetPreAlerts();
     });
+    _persistTimerState();
     if (type == SessionType.pomodoro) {
       unawaited(_startAppBlockerIfConfigured());
     } else {
@@ -113,6 +220,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       _isRunning = true;
       isSessionActive = true;
     });
+    _persistTimerState();
     // Warm up audio context after a user gesture to satisfy autoplay policies (web/mobile)
     unawaited(_warmupAudioContext());
     // Schedule periodic focus-checks only during Pomodoro sessions
@@ -133,20 +241,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         durationMinutes: durationMinutes,
       ));
     }
-    _ticker = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return;
-      setState(() {
-        // Compute remaining by comparing to target end time
-        final now = DateTime.now();
-        final diff = _endAt!.difference(now);
-        _remaining = diff.isNegative ? Duration.zero : diff;
-        if (_remaining <= Duration.zero) {
-          _remaining = Duration.zero;
-          _stopTimer();
-          unawaited(_onComplete());
-        }
-      });
-    });
+    _startTicker();
   }
 
   void _pauseTimer() {
@@ -156,6 +251,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     // Capture remaining at pause and clear end time
     _endAt = null;
     _focusCheckTimer?.cancel();
+    _persistTimerState();
     // Note: App blocker continues running during pause to maintain blocking
   }
 
@@ -167,12 +263,20 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     _focusCheckTimer?.cancel();
     _stopAlarm();
     unawaited(_stopAppBlocker());
+    _persistTimerState();
   }
 
   void _resetTimer() {
     _stopTimer();
     setState(() => _remaining = _total);
     _endAt = null;
+    _resetPreAlerts();
+    _persistTimerState();
+  }
+
+  void _resetPreAlerts() {
+    _oneMinuteAlertSent = false;
+    _tenSecondAlertSent = false;
   }
 
   void _skipSession() {
@@ -193,6 +297,22 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         await _showFocusDialog();
       }
     });
+  }
+
+  void _maybeTriggerPreAlerts() {
+    if (_remaining <= Duration.zero) return;
+    if (!_oneMinuteAlertSent && _remaining <= const Duration(minutes: 1)) {
+      _oneMinuteAlertSent = true;
+      _playTimedAlarm(const Duration(seconds: 2));
+      Logger.i('Pre-alert: 1 minute remaining');
+      _persistTimerState();
+    }
+    if (!_tenSecondAlertSent && _remaining <= const Duration(seconds: 10)) {
+      _tenSecondAlertSent = true;
+      _playTimedAlarm(const Duration(seconds: 2));
+      Logger.i('Pre-alert: 10 seconds remaining');
+      _persistTimerState();
+    }
   }
 
   /// Called when the current session completes or is skipped.
@@ -341,7 +461,9 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       _endAt = null;
       _current = SessionType.pomodoro;
       _remaining = _durations[_current]!;
+      _resetPreAlerts();
     });
+    _persistTimerState();
   }
 
   Future<void> _showPresetDialog() async {
@@ -647,7 +769,9 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                         _current = SessionType.pomodoro;
                         _remaining = _durations[SessionType.pomodoro]!;
                         _endAt = null;
+                        _resetPreAlerts();
                       });
+                      _persistTimerState();
                       Navigator.of(ctx).pop();
                     },
                     child: const Text('Ok'),
@@ -841,12 +965,17 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     } catch (_) {}
   }
 
-  /// Plays the alarm sound for 5 seconds, then stops.
-  void _playAlarmForFiveSeconds() {
+  void _playTimedAlarm(Duration duration) {
     unawaited(_startAlarmLoop());
-    Future.delayed(const Duration(seconds: 5), () async {
+    Future.delayed(duration, () async {
+      if (!mounted) return;
       await _stopAlarm();
     });
+  }
+
+  /// Plays the alarm sound for 5 seconds, then stops.
+  void _playAlarmForFiveSeconds() {
+    _playTimedAlarm(const Duration(seconds: 5));
   }
 
   Future<void> _warmupAudioContext() async {
@@ -1053,6 +1182,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: SessionType.values.map((s) {
         final selected = s == _current;
+        final disabled = _breakChipsLocked && s != SessionType.pomodoro;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: SizedBox(
@@ -1064,14 +1194,16 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                 textAlign: TextAlign.center,
               ),
               selected: selected,
-              onSelected: (_) => _switchSession(s),
-              selectedColor: _accent,
+              onSelected: disabled ? null : (_) => _switchSession(s),
+              selectedColor: disabled ? Colors.grey[400] : _accent,
               labelStyle: TextStyle(
-                color: selected ? Colors.white : Colors.black87,
+                color: selected
+                    ? Colors.white
+                    : (disabled ? Colors.black38 : Colors.black87),
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
-              backgroundColor: Colors.grey[300],
+              backgroundColor: disabled ? Colors.grey[200] : Colors.grey[300],
               padding: chipPadding,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6)),

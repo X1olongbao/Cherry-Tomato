@@ -35,10 +35,13 @@ class _SignUpPageState extends State<SignUpPage> {
 
   void _onChanged() => setState(() {});
 
-  bool get _allFilled =>
+  bool get _isPasswordValid => _passwordCtrl.text.length >= 8;
+
+  bool get _canContinue =>
       _usernameCtrl.text.isNotEmpty &&
       _emailCtrl.text.isNotEmpty &&
-      _passwordCtrl.text.isNotEmpty;
+      _isPasswordValid &&
+      !_loading;
 
   // Send OTP via Supabase and navigate to OTP verification.
   Future<void> _handleSignup() async {
@@ -51,6 +54,11 @@ class _SignUpPageState extends State<SignUpPage> {
       final email = _emailCtrl.text.trim();
       final username = _usernameCtrl.text.trim();
       final password = _passwordCtrl.text;
+
+      if (!_isPasswordValid) {
+        setState(() => _error = 'Password must be at least 8 characters.');
+        return;
+      }
 
       // Use Supabase's built-in OTP functionality
       final supabase = Supabase.instance.client;
@@ -349,6 +357,14 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                 ),
               ),
+              if (_passwordCtrl.text.isNotEmpty && !_isPasswordValid)
+                const Padding(
+                  padding: EdgeInsets.only(left: 8.0, top: 6),
+                  child: Text(
+                    'Password must be at least 8 characters.',
+                    style: TextStyle(color: tomatoRed, fontSize: 13),
+                  ),
+                ),
 
               const SizedBox(height: 40),
 
@@ -356,7 +372,7 @@ class _SignUpPageState extends State<SignUpPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _allFilled && !_loading ? _handleSignup : null,
+                  onPressed: _canContinue ? _handleSignup : null,
                   style: _continueStyle,
                   child: _loading
                       ? const SizedBox(

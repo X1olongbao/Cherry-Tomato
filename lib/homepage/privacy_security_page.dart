@@ -33,8 +33,10 @@ class PrivacySecurityPage extends StatefulWidget {
 class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
   final _oldPwdCtrl = TextEditingController();
   final _newPwdCtrl = TextEditingController();
+  final _confirmPwdCtrl = TextEditingController();
   bool _oldVisible = false;
   bool _newVisible = false;
+  bool _confirmVisible = false;
 
   bool notificationsEnabled = false;
   bool appBlockerEnabled = false;
@@ -117,6 +119,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     _persistAppBlockerState();
     _oldPwdCtrl.dispose();
     _newPwdCtrl.dispose();
+    _confirmPwdCtrl.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -625,12 +628,29 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                         _passwordField('New Password', _newPwdCtrl, _newVisible, () {
                           setState(() => _newVisible = !_newVisible);
                         }),
+                        const SizedBox(height: 12),
+                        _passwordField('Confirm Password', _confirmPwdCtrl, _confirmVisible, () {
+                          setState(() => _confirmVisible = !_confirmVisible);
+                        }),
+                        if (_confirmPwdCtrl.text.isNotEmpty &&
+                            _newPwdCtrl.text != _confirmPwdCtrl.text) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Passwords do not match',
+                              style: TextStyle(color: Colors.red.shade600, fontSize: 12),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           height: 48,
                           child: ElevatedButton(
-                            onPressed: _isOAuthLogin ? null : _handleChangePassword,
+                            onPressed: _isOAuthLogin || !_passwordsValid
+                                ? null
+                                : _handleChangePassword,
                             child: const Text('Confirm Change'),
                           ),
                         ),
@@ -905,6 +925,12 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       ),
     );
   }
+
+  bool get _passwordsValid =>
+      _oldPwdCtrl.text.isNotEmpty &&
+      _newPwdCtrl.text.isNotEmpty &&
+      _confirmPwdCtrl.text.isNotEmpty &&
+      _newPwdCtrl.text == _confirmPwdCtrl.text;
 
   Widget _sectionHeader(String text) {
     return Text(
