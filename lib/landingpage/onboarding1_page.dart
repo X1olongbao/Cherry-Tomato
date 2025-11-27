@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'onboarding2_page.dart';
 import 'get_started_page.dart';
+import '../utilities/smooth_page_route.dart';
 
 class Onboarding1Page extends StatelessWidget {
   const Onboarding1Page({super.key});
@@ -64,8 +65,7 @@ class Onboarding1Page extends StatelessWidget {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                                builder: (context) => const GetStartedPage()),
+                            createSmoothRoute(const GetStartedPage()),
                           );
                         },
                         child: Text(
@@ -125,8 +125,7 @@ class Onboarding1Page extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (context) => const Onboarding2Page()),
+                    createSmoothRoute(const Onboarding2Page()),
                   );
                 },
                 child: Image.asset(

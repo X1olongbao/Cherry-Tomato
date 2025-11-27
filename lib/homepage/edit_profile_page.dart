@@ -4,6 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/services/profile_service.dart';
+import 'package:tomatonator/services/notification_service.dart';
+import 'package:tomatonator/models/app_notification.dart';
+import 'package:uuid/uuid.dart';
 import 'package:tomatonator/userloginforgot/email_otp_verification_page.dart';
 
 const tomatoRed = Color(0xFFE53935);
@@ -23,6 +26,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   bool _isSaving = false;
   String? _avatarUrl;
   File? _selectedImage;
+  String? _originalUsername;
 
   @override
   void initState() {
@@ -35,18 +39,32 @@ class _EditProfilePageState extends State<EditProfilePage> {
     try {
       final user = AuthService.instance.currentUser;
       if (user != null) {
-        _usernameController.text = user.username ?? '';
-        
-        // Load avatar URL from profiles table
+        // Load username and avatar URL from profiles table
         final supabase = Supabase.instance.client;
         final profile = await supabase
             .from('profiles')
-            .select('avatar_url')
+            .select('username, avatar_url')
             .eq('id', user.id)
             .maybeSingle();
         
-        if (profile != null && profile['avatar_url'] != null) {
-          _avatarUrl = profile['avatar_url'] as String;
+        if (profile != null) {
+          // Load username from profiles table (this matches what's displayed)
+          if (profile['username'] != null) {
+            _usernameController.text = (profile['username'] as String).trim();
+            _originalUsername = _usernameController.text;
+          } else {
+            // Fallback to auth metadata if not in profiles table
+            _usernameController.text = user.username ?? '';
+            _originalUsername = _usernameController.text;
+          }
+          
+          if (profile['avatar_url'] != null) {
+            _avatarUrl = profile['avatar_url'] as String;
+          }
+        } else {
+          // If no profile exists, use auth metadata
+          _usernameController.text = user.username ?? '';
+          _originalUsername = _usernameController.text;
         }
       }
     } catch (e) {
@@ -151,7 +169,30 @@ class _EditProfilePageState extends State<EditProfilePage> {
       // Refresh profile service
       await ProfileService.instance.refreshCurrentUserProfile();
 
+      // Add notification if username was changed
+      if (username.isNotEmpty && username != _originalUsername) {
+        NotificationService.instance.add(
+          AppNotification(
+            id: const Uuid().v4(),
+            title: 'Profile Updated',
+            message: 'You successfully changed your username to "$username"',
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+
       if (!mounted) return;
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated successfully!'),
+          backgroundColor: tomatoRed,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;

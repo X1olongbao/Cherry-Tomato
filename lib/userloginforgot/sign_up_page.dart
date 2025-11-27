@@ -192,9 +192,10 @@ class _SignUpPageState extends State<SignUpPage> {
           await prefs.setBool('seen_onboarding_v1_${user.id}', true);
         }
       } catch (_) {}
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const Homepage()),
+        (route) => false,
       );
     } catch (e) {
       setState(() => _error = 'Google sign-up failed: $e');

@@ -21,6 +21,7 @@ import '../models/task.dart';
 import '../models/session_type.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../landingpage/onboarding1_page.dart';
+import '../landingpage/app_tutorial_dialog.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -44,6 +45,7 @@ class _HomepageState extends State<Homepage> {
     _handleTaskUpdates();
     unawaited(_taskService.refreshActiveTasks());
     unawaited(_maybeShowOnboarding());
+    unawaited(_maybeShowTutorial());
   }
 
   @override
@@ -71,6 +73,19 @@ class _HomepageState extends State<Homepage> {
       );
     });
     await prefs.setBool(key, true);
+  }
+
+  Future<void> _maybeShowTutorial() async {
+    final user = AuthService.instance.currentUser;
+    if (user == null) return;
+    
+    // Wait a bit for onboarding to potentially show first
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showAppTutorial(context, user.id);
+    });
   }
 
   String _formatDate(Task task) {
@@ -134,6 +149,22 @@ class _HomepageState extends State<Homepage> {
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _getWelcomeMessage() {
+    final taskCount = _tasks.length;
+    
+    if (taskCount == 0) {
+      return 'Welcome! Ready to start your first goal?';
+    } else if (taskCount == 1) {
+      return 'Great start! You have 1 task. Let\'s make it happen! 🎯';
+    } else if (taskCount <= 3) {
+      return 'You\'re on track with $taskCount tasks. Keep the momentum going! 💪';
+    } else if (taskCount <= 5) {
+      return 'Wow! $taskCount tasks lined up. You\'re crushing it! 🔥';
+    } else {
+      return 'Amazing! $taskCount tasks to conquer. One Pomodoro at a time! 🍅';
+    }
   }
 
   String _relativeDeadlineText(DateTime deadline) {
@@ -353,9 +384,9 @@ class _HomepageState extends State<Homepage> {
                 children: [
                   Image.asset('assets/Homepage/goal.png', width: 56),
                   const SizedBox(width: 16),
-                  const Expanded(
-                    child: Text('Welcome! Ready to start your first goal?',
-                        style: TextStyle(
+                  Expanded(
+                    child: Text(_getWelcomeMessage(),
+                        style: const TextStyle(
                             fontSize: 16,
                             color: Colors.black,
                             fontWeight: FontWeight.w500)),

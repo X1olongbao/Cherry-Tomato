@@ -69,11 +69,25 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   Timer? _focusCheckTimer;
   bool _isDialogShowing = false;
   final List<String> _focusMessages = const [
-    'Still focused? Keep crushing those tasks!',
-    'Quick check: Are you in the zone?',
-    'Stay sharp! Focus still on point?',
-    'Focus check: Yes or No?',
-    'Eyes on the prize?'
+    'Hey there! Are you still with us? 👀',
+    'Quick check-in: Still crushing it? 💪',
+    'Psst... are you in the zone? 🎯',
+    'Just checking: Focus mode still ON? 🔥',
+    'Still locked in? You\'re doing great! ⚡',
+    'Are you there? Keep that momentum going! 🚀',
+    'Quick question: Still focused on the task? 🎓',
+    'Hello! Eyes still on the prize? 🏆',
+    'Checking in: Are you staying productive? ✨',
+    'Still here? You\'re amazing! Keep going! 🌟',
+    'Quick vibe check: Still in focus mode? 🧠',
+    'Are you still grinding? Let\'s go! 💯',
+  ];
+  
+  final List<String> _focusTitles = const [
+    'Quick Check-In',
+    'Are You There?',
+    'Staying Focused?',
+    'Still With Us?',
   ];
   final math.Random _rand = math.Random();
   AudioPlayer? _alarmPlayer;
@@ -770,15 +784,10 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     if (_isDialogShowing) return; // prevent multiple stacked dialogs
     _isDialogShowing = true;
     final message = _focusMessages[_rand.nextInt(_focusMessages.length)];
-    // Start looping alarm
-    await _startAlarmLoop();
-    if (!mounted) {
-      _isDialogShowing = false;
-      await _stopAlarm();
-      return;
-    }
-    // No auto-close - user must respond
-    await showDialog<void>(
+    final title = _focusTitles[_rand.nextInt(_focusTitles.length)];
+    
+    // Show dialog first
+    final dialogFuture = showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -788,7 +797,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
             children: [
               Icon(Icons.timer, color: Colors.black87, size: 24.sp),
               SizedBox(width: 8.w),
-              Text('Focus Check', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(title, style: TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
           content: Text(message),
@@ -825,6 +834,15 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         );
       },
     );
+    
+    // Start alarm after 3 seconds delay
+    Future.delayed(const Duration(seconds: 3), () async {
+      if (mounted && _isDialogShowing) {
+        await _startAlarmLoop();
+      }
+    });
+    
+    await dialogFuture;
     _isDialogShowing = false;
   }
 
@@ -832,14 +850,10 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     if (_isDialogShowing) return;
     _isDialogShowing = true;
     final message = _focusMessages[_rand.nextInt(_focusMessages.length)];
-    await _startAlarmLoop();
-    if (!mounted) {
-      _isDialogShowing = false;
-      await _stopAlarm();
-      return;
-    }
+    final title = _focusTitles[_rand.nextInt(_focusTitles.length)];
     
-    await showDialog<void>(
+    // Show dialog first
+    final dialogFuture = showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -849,7 +863,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
             children: [
               Icon(Icons.psychology, color: Colors.black87, size: 24.sp),
               SizedBox(width: 8.w),
-              Text('Focus Check', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(title, style: TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
           content: Text(message),
@@ -899,6 +913,15 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         );
       },
     );
+    
+    // Start alarm after 3 seconds delay
+    Future.delayed(const Duration(seconds: 3), () async {
+      if (mounted && _isDialogShowing) {
+        await _startAlarmLoop();
+      }
+    });
+    
+    await dialogFuture;
     _isDialogShowing = false;
   }
 
@@ -1371,7 +1394,11 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _circleButton(icon: Icons.refresh, onTap: _resetTimer, enabled: true), // Always enabled for restart
+        _circleButton(
+          icon: Icons.refresh, 
+          onTap: _resetTimer, 
+          enabled: _current == SessionType.pomodoro, // Only enabled during Pomodoro, grayed during breaks
+        ),
         SizedBox(width: 20.w),
         GestureDetector(
           onTap: _isRunning ? null : _startTimer,

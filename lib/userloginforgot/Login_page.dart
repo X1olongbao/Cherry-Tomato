@@ -81,9 +81,10 @@ class _LoginPageState extends State<LoginPage> {
         }
       } catch (_) {}
       if (!mounted) return;
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const Homepage()),
+        (route) => false,
       );
     } on AuthFailure catch (e) {
       setState(() => _error = e.message);
@@ -192,9 +193,10 @@ class _LoginPageState extends State<LoginPage> {
         throw Exception('Logged into Google (Firebase) but not into Supabase');
       }
       if (!mounted) return;
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const Homepage()),
+        (route) => false,
       );
     } catch (e) {
       setState(() => _error = 'Google sign-in failed: $e');

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tomatonator/services/auth_service.dart';
-import 'package:tomatonator/userloginforgot/login_page.dart';
+import 'package:tomatonator/landingpage/landing_page.dart';
 import 'package:tomatonator/homepage/privacy_security_page.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:tomatonator/homepage/edit_profile_page.dart';
@@ -208,7 +208,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       await AuthService.instance.signOut();
                       if (!mounted) return;
                       navigator.pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                        MaterialPageRoute(builder: (_) => const LandingPage()),
                         (route) => false,
                       );
                     } catch (e) {
