@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/task.dart';
 import '../models/session_type.dart';
 import 'auth_service.dart';
+import 'api_service.dart';
 import 'database_service.dart';
 import 'task_reminder_service.dart';
+import '../utilities/logger.dart';
 
 class TaskProgressResult {
   final Task task;
@@ -108,7 +111,21 @@ class TaskService {
   Future<void> deleteTask(String id) async {
     // Cancel reminders before deleting task
     await TaskReminderService.instance.cancelRemindersForTask(id);
+    
+    // Delete from local database
     await DatabaseService.instance.deleteTask(id);
+    
+    // Delete from Supabase if user is logged in
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null && userId.isNotEmpty) {
+        await ApiService.instance.deleteTask(id);
+      }
+    } catch (e) {
+      Logger.w('Failed to delete task from Supabase: $e');
+      // Continue even if remote delete fails - local delete succeeded
+    }
+    
     await refreshActiveTasks();
   }
 

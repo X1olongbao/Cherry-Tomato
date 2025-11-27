@@ -7,6 +7,13 @@ version: 1.0.0+1
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/appicon/cherry icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/appicon/cherry icon.png"
+
 dependencies:
   flutter:
     sdk: flutter
@@ -50,10 +57,12 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   assets:
+    - assets/appicon/cherry icon.png
     - assets/landing page/CHERRY TOMATO LOGO-01 1.png
     - assets/landing page/arrow button.png
     - assets/onboarding 1/Group 92.png

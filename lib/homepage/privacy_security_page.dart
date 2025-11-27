@@ -279,15 +279,15 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
             
             return Container(
               height: MediaQuery.of(ctx).size.height * 0.9,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
               ),
               child: Column(
                 children: [
                   // Header
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: EdgeInsets.all(20.w),
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(color: Colors.grey.shade200),
@@ -295,20 +295,20 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                     ),
                     child: Row(
                       children: [
-                        const Text(
+                        Text(
                           'Select Apps to Block',
-                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold),
                         ),
                         const Spacer(),
                         if (_isScanning)
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                          SizedBox(
+                            width: 20.w,
+                            height: 20.w,
+                            child: const CircularProgressIndicator(strokeWidth: 2),
                           )
                         else
                           IconButton(
-                            icon: const Icon(Icons.refresh),
+                            icon: Icon(Icons.refresh, size: 24.sp),
                             onPressed: () async {
                               await _scanApps();
                               setSheetState(() {});
@@ -316,7 +316,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                             tooltip: 'Rescan apps',
                           ),
                         IconButton(
-                          icon: const Icon(Icons.close),
+                          icon: Icon(Icons.close, size: 24.sp),
                           onPressed: () => Navigator.of(ctx).pop(),
                         ),
                       ],
@@ -324,7 +324,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                   ),
                   // Search bar
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(16.w),
                     child: TextField(
                       controller: localSearch,
                       onChanged: (_) => setSheetState(() {}),
@@ -337,7 +337,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
                       ),
                     ),
                   ),
@@ -350,11 +350,11 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.apps, size: 64, color: Colors.grey.shade400),
-                                    const SizedBox(height: 16),
+                                    Icon(Icons.apps, size: 64.sp, color: Colors.grey.shade400),
+                                    SizedBox(height: 16.h),
                                     Text(
                                       query.isEmpty ? 'No apps found' : 'No apps match your search',
-                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
                                     ),
                                   ],
                                 ),
@@ -453,13 +453,14 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
         setSheetState(() {});
       },
       child: Container(
+        padding: EdgeInsets.all(8.w),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFE53935).withOpacity(0.1) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(16.r),
           border: Border.all(
             color: selected ? const Color(0xFFE53935) : Colors.grey.shade300,
-            width: selected ? 2 : 1,
+            width: selected ? 2.w : 1.w,
           ),
         ),
         child: Column(
@@ -468,65 +469,68 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Stack(
+              clipBehavior: Clip.none,
               children: [
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 56.w,
+                  height: 56.w,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12.r),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+                        blurRadius: 4.r,
+                        offset: Offset(0, 2.h),
                       ),
                     ],
                   ),
                   child: iconBytes != null
                       ? ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(12.r),
                           child: Image.memory(
                             iconBytes,
-                            width: 56,
-                            height: 56,
+                            width: 56.w,
+                            height: 56.w,
                             fit: BoxFit.cover,
                           ),
                         )
-                      : const Icon(Icons.apps, color: Colors.black54, size: 32),
+                      : Icon(Icons.apps, color: Colors.black54, size: 32.sp),
                 ),
                 if (selected)
                   Positioned(
-                    top: -4,
-                    right: -4,
+                    top: -4.h,
+                    right: -4.w,
                     child: Container(
-                      width: 24,
-                      height: 24,
+                      width: 24.w,
+                      height: 24.w,
                       decoration: const BoxDecoration(
                         color: Color(0xFFE53935),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check,
                         color: Colors.white,
-                        size: 16,
+                        size: 16.sp,
                       ),
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                app.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  color: selected ? const Color(0xFFE53935) : Colors.black87,
+            SizedBox(height: 8.h),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4.w),
+                child: Text(
+                  app.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                    color: selected ? const Color(0xFFE53935) : Colors.black87,
+                  ),
                 ),
               ),
             ),
@@ -669,6 +673,10 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                         _passwordField('New Password', _newPwdCtrl, _newVisible, () {
                           setState(() => _newVisible = !_newVisible);
                         }),
+                        if (_newPwdCtrl.text.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _buildPasswordStrengthIndicator(_newPwdCtrl.text),
+                        ],
                         const SizedBox(height: 12),
                         _passwordField('Confirm Password', _confirmPwdCtrl, _confirmVisible, () {
                           setState(() => _confirmVisible = !_confirmVisible);
@@ -692,6 +700,18 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                             onPressed: _isOAuthLogin || !_passwordsValid
                                 ? null
                                 : _handleChangePassword,
+                            style: ElevatedButton.styleFrom(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              foregroundColor: Colors.white,
+                            ).copyWith(
+                              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                                if (states.contains(WidgetState.disabled)) {
+                                  return const Color(0xFFE53935).withOpacity(0.2);
+                                }
+                                return const Color(0xFFE53935);
+                              }),
+                            ),
                             child: const Text('Confirm Change'),
                           ),
                         ),
@@ -973,6 +993,48 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       _confirmPwdCtrl.text.isNotEmpty &&
       _newPwdCtrl.text == _confirmPwdCtrl.text;
 
+  // Password strength: 0=weak, 1=medium, 2=strong
+  int _getPasswordStrength(String password) {
+    if (password.isEmpty) return 0;
+    int strength = 0;
+    
+    // Check length
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
+    
+    // Check for numbers
+    if (password.contains(RegExp(r'[0-9]'))) strength++;
+    
+    // Check for uppercase
+    if (password.contains(RegExp(r'[A-Z]'))) strength++;
+    
+    // Check for special characters
+    if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) strength++;
+    
+    // Return 0 (weak), 1 (medium), or 2 (strong)
+    if (strength <= 2) return 0;
+    if (strength <= 3) return 1;
+    return 2;
+  }
+
+  String _getPasswordStrengthText(int strength) {
+    switch (strength) {
+      case 0: return 'Weak';
+      case 1: return 'Medium';
+      case 2: return 'Strong';
+      default: return '';
+    }
+  }
+
+  Color _getPasswordStrengthColor(int strength) {
+    switch (strength) {
+      case 0: return Colors.red;
+      case 1: return Colors.orange;
+      case 2: return Colors.green;
+      default: return Colors.grey;
+    }
+  }
+
   Widget _sectionHeader(String text) {
     return Text(
       text,
@@ -994,6 +1056,60 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     return Text(
       text,
       style: const TextStyle(fontSize: 13, color: Colors.black54),
+    );
+  }
+
+  Widget _buildPasswordStrengthIndicator(String password) {
+    final strength = _getPasswordStrength(password);
+    final strengthText = _getPasswordStrengthText(strength);
+    final strengthColor = _getPasswordStrengthColor(strength);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: strength >= 0 ? strengthColor : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: strength >= 1 ? strengthColor : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: strength >= 2 ? strengthColor : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Password strength: $strengthText',
+          style: TextStyle(
+            fontSize: 12,
+            color: strengthColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:math' as math;
 import 'create_new_task.dart';
 import 'calendar_page.dart';
@@ -754,6 +755,8 @@ class _HomepageState extends State<Homepage> {
                     );
                     if (confirm == true) {
                       await _taskService.deleteTask(task.id);
+                      // Refresh the task list to update UI
+                      await _taskService.refreshActiveTasks();
                     }
                   },
                 ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../models/task.dart';
 import '../models/session_type.dart';
 import 'package:tomatonator/services/session_service.dart';
@@ -54,8 +55,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     SessionType.longBreak: const Duration(minutes: 15),
   };
   PresetMode _presetMode = PresetMode.classic;
-  // Focus check interval: every 7 minutes
-  static const Duration _focusCheckInterval = Duration(minutes: 7);
+  // Focus check interval: every 15 seconds (TRIAL MODE - change back to minutes: 7 for production)
+  static const Duration _focusCheckInterval = Duration(seconds: 15);
 
   Timer? _ticker;
   Duration _remaining = const Duration(minutes: 25);
@@ -484,8 +485,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
 
           InputDecoration fieldDec(String label) => InputDecoration(
             isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
             hintText: 'Min',
             suffixText: 'Min',
           );
@@ -503,9 +504,9 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                 suffixIcon: (editable && onTap != null)
                     ? GestureDetector(
                         onTap: onTap,
-                        child: const Icon(Icons.expand_more, size: 18, color: Colors.black54),
+                        child: Icon(Icons.expand_more, size: 18.sp, color: Colors.black54),
                       )
-                    : const SizedBox(width: 24), // Placeholder to maintain consistent width
+                    : SizedBox(width: 24.w), // Placeholder to maintain consistent width
               ),
             ),
           );
@@ -517,10 +518,10 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
               barrierDismissible: true,
               builder: (dialogCtx) {
                 return AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  contentPadding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-                  titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+                  contentPadding: EdgeInsets.fromLTRB(20.w, 18.h, 20.w, 12.h),
+                  titlePadding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 0),
+                  title: Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
                   content: SizedBox(
                     height: 150,
                     child: CupertinoPicker(
@@ -536,11 +537,11 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                       },
                       children: List.generate(max, (i) => Center(
                             child: Text('${i + 1}',
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                                style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w600)),
                           )),
                     ),
                   ),
-                  actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  actionsPadding: EdgeInsets.fromLTRB(20.w, 0, 20.w, 12.h),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(dialogCtx).pop(),
@@ -550,7 +551,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _accent,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
                         elevation: 0,
                       ),
                       onPressed: () {
@@ -566,12 +567,12 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
           }
 
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            contentPadding: const EdgeInsets.fromLTRB(20, 22, 20, 12),
-            titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-            title: const Text('Select Mode', style: TextStyle(fontWeight: FontWeight.w700)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+            contentPadding: EdgeInsets.fromLTRB(20.w, 22.h, 20.w, 12.h),
+            titlePadding: EdgeInsets.fromLTRB(20.w, 18.h, 20.w, 8.h),
+            title: Text('Select Mode', style: TextStyle(fontWeight: FontWeight.w700)),
             content: SizedBox(
-              width: 320, // Fixed width for consistent dialog size
+              width: 320.w, // Fixed width for consistent dialog size
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -587,17 +588,17 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                     return InkWell(
                       onTap: onTap,
                       child: Container(
-                        width: 44,
-                        height: 44,
+                        width: 44.w,
+                        height: 44.w,
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black12, blurRadius: 8.r, offset: Offset(0, 2.h)),
                           ],
                           border: Border.all(color: Colors.grey.shade300),
                         ),
-                        child: Icon(icon, color: _accent, size: 20),
+                        child: Icon(icon, color: _accent, size: 20.sp),
                       ),
                     );
                   }
@@ -606,22 +607,22 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                       arrow(Icons.arrow_back_ios, () => step(-1)),
                       Expanded(
                         child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 12),
-                          height: 44,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          margin: EdgeInsets.symmetric(horizontal: 12.w),
+                          height: 44.h,
+                          padding: EdgeInsets.symmetric(horizontal: 16.w),
                           decoration: BoxDecoration(
                             color: _accent,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: const [
-                              BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+                            borderRadius: BorderRadius.circular(12.r),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black12, blurRadius: 8.r, offset: Offset(0, 2.h)),
                             ],
                           ),
                           child: Center(
                             child: Text(
                               _presetLabel(selected),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 15,
+                                fontSize: 15.sp,
                                 fontWeight: FontWeight.w700,
                               ),
                               maxLines: 1,
@@ -634,9 +635,9 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                     ],
                   );
                 }),
-                const SizedBox(height: 16),
-                const Text('Time', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 10),
+                SizedBox(height: 16.h),
+                Text('Time', style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(height: 10.h),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -661,7 +662,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12.h),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -686,7 +687,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12.h),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -715,7 +716,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
               ],
               ),
             ),
-            actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            actionsPadding: EdgeInsets.fromLTRB(20.w, 0, 20.w, 16.h),
             actions: [
                 SizedBox(
                   width: double.infinity,
@@ -723,9 +724,9 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _accent,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
                       elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: EdgeInsets.symmetric(vertical: 12.h),
                     ),
                     onPressed: () {
                       final p = int.tryParse(pomCtrl.text);
@@ -776,80 +777,51 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       await _stopAlarm();
       return;
     }
-    int remainingSeconds = 15;
-    Timer? autoCloseTimer;
-    // Rounded-corner dialog matching app style with auto-dismiss in 15s
+    // No auto-close - user must respond
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setState) {
-            autoCloseTimer ??= Timer.periodic(const Duration(seconds: 1), (t) async {
-              remainingSeconds--;
-              setState(() {});
-              if (remainingSeconds <= 0) {
-                t.cancel();
-                autoCloseTimer = null;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+          title: Row(
+            children: [
+              Icon(Icons.timer, color: Colors.black87, size: 24.sp),
+              SizedBox(width: 8.w),
+              Text('Focus Check', style: TextStyle(fontWeight: FontWeight.w600)),
+            ],
+          ),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _stopAlarm();
+                // End the session and return to homepage
+                _stopTimer();
+                if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                if (mounted) {
+                  final payload = {
+                    'motivational': true,
+                    'message': "That's okay! Let's reset and come back strong.",
+                  };
+                  Navigator.of(context).pop(payload);
+                }
+              },
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
                 await _stopAlarm();
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-              }
-            });
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Row(
-                children: [
-                  const Icon(Icons.timer, color: Colors.black87),
-                  const SizedBox(width: 8),
-                  Text('Focus Check', style: const TextStyle(fontWeight: FontWeight.w600)),
-                ],
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(message),
-                  const SizedBox(height: 8),
-                  Text('Auto closes in ${_formatHms(remainingSeconds)}',
-                      style: const TextStyle(color: Colors.black54)),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () async {
-                    autoCloseTimer?.cancel();
-                    autoCloseTimer = null;
-                    await _stopAlarm();
-                    // End the session and return to homepage
-                    _stopTimer();
-                    if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                    if (mounted) {
-                      final payload = {
-                        'motivational': true,
-                        'message': "That's okay! Let's reset and come back strong.",
-                      };
-                      Navigator.of(context).pop(payload);
-                    }
-                  },
-                  child: const Text('No'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    autoCloseTimer?.cancel();
-                    autoCloseTimer = null;
-                    await _stopAlarm();
-                    if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Yes'),
-                ),
-              ],
-            );
-          },
+              child: const Text('Yes'),
+            ),
+          ],
         );
       },
     );
@@ -872,11 +844,11 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
           title: Row(
-            children: const [
-              Icon(Icons.psychology, color: Colors.black87),
-              SizedBox(width: 8),
+            children: [
+              Icon(Icons.psychology, color: Colors.black87, size: 24.sp),
+              SizedBox(width: 8.w),
               Text('Focus Check', style: TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
@@ -960,11 +932,11 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
           title: Row(
-            children: const [
-              Icon(Icons.emoji_events, color: Colors.black87),
-              SizedBox(width: 8),
+            children: [
+              Icon(Icons.emoji_events, color: Colors.black87, size: 24.sp),
+              SizedBox(width: 8.w),
               Text('Cycle Complete!', style: TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
@@ -1057,11 +1029,11 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         barrierDismissible: false,
         builder: (ctx) {
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
             title: Row(
-              children: const [
-                Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                SizedBox(width: 8),
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24.sp),
+                SizedBox(width: 8.w),
                 Text('Quit Session?', style: TextStyle(fontWeight: FontWeight.w600)),
               ],
             ),
@@ -1169,23 +1141,23 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(height: 4),
+            SizedBox(height: 4.h),
             Text('Currently Task',
                 style: theme.textTheme.labelMedium
                     ?.copyWith(color: Colors.grey[600])),
-            const SizedBox(height: 8),
+            SizedBox(height: 8.h),
             _buildTaskCard(),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.h),
             _buildSessionChips(), // Now a Row
-            const SizedBox(height: 8),
+            SizedBox(height: 8.h),
             _buildCircularTimer(), // Smaller size
-            const SizedBox(height: 12),
+            SizedBox(height: 12.h),
             _buildTestOverlayButton(),
-            const SizedBox(height: 16),
+            SizedBox(height: 16.h),
             _buildCycleRow(),
-            const SizedBox(height: 4),
+            SizedBox(height: 4.h),
             _buildPresetBadge(),
-            const SizedBox(height: 16),
+            SizedBox(height: 16.h),
             _buildControls(),
           ],
         ),
@@ -1203,26 +1175,26 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     }
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+        borderRadius: BorderRadius.circular(12.r),
+        boxShadow: [
+          BoxShadow(color: Colors.black12, blurRadius: 8.r, offset: Offset(0, 2.h)),
         ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 6,
-            height: 48,
+            width: 6.w,
+            height: 48.h,
             decoration: BoxDecoration(
               color: _accent,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(4.r),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1230,15 +1202,15 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                 Row(
                   children: [
                     Checkbox(value: t.isDone, onChanged: (_) {}),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4.w),
                     Expanded(
                       child: Text(t.title,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 14)),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14.sp)),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4.h),
                 Wrap(
                   spacing: 12,
                   runSpacing: 4,
@@ -1305,12 +1277,12 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
 
   Widget _buildCircularTimer() {
     return SizedBox(
-      height: 260, // Increased from 220
+      height: 260.h, // Increased from 220
       child: Center(
         child: AspectRatio(
           aspectRatio: 1,
           child: LayoutBuilder(builder: (context, constraints) {
-            final stroke = 12.0;
+            final stroke = 12.0.w;
             return Stack(
               children: [
                 Positioned.fill(
@@ -1325,8 +1297,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                 Center(
                   child: Text(
                     _format(_remaining),
-                    style: const TextStyle(
-                      fontSize: 40,
+                    style: TextStyle(
+                      fontSize: 40.sp,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 1,
                     ),
@@ -1352,13 +1324,13 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
           child: active
               ? Image.asset(
                   'assets/sessiontoomato/minicherry.png',
-                  width: 22,
-                  height: 22,
+                  width: 22.w,
+                  height: 22.w,
                   fit: BoxFit.contain,
                 )
               : Container(
-                  width: 20,
-                  height: 20,
+                  width: 20.w,
+                  height: 20.w,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.grey[300],
@@ -1374,19 +1346,19 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     return GestureDetector(
       onTap: _showPresetDialog,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
         decoration: BoxDecoration(
           color: const Color(0xFFE53935),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+          borderRadius: BorderRadius.circular(20.r),
+          boxShadow: [
+            BoxShadow(color: Colors.black12, blurRadius: 8.r, offset: Offset(0, 2.h)),
           ],
         ),
         child: Text(
           _presetLabel(_presetMode),
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: 12.sp,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1399,36 +1371,31 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _circleButton(icon: Icons.refresh, onTap: _resetTimer, enabled: !_isRunning),
-        const SizedBox(width: 30),
-        if (!_isRunning)
-          GestureDetector(
-            onTap: _startTimer,
-            child: Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: _accent,
-                shape: BoxShape.circle,
-                boxShadow: const [
-                  BoxShadow(
-                      color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
-                ],
-              ),
-              child: const Icon(Icons.play_arrow, size: 40, color: Colors.white),
-            ),
-          )
-        else
-          Container(
-            width: 72,
-            height: 72,
+        _circleButton(icon: Icons.refresh, onTap: _resetTimer, enabled: true), // Always enabled for restart
+        SizedBox(width: 20.w),
+        GestureDetector(
+          onTap: _isRunning ? null : _startTimer,
+          child: Container(
+            width: 72.w,
+            height: 72.w,
             decoration: BoxDecoration(
-              color: Colors.grey[400],
+              color: _isRunning ? _accent.withOpacity(0.2) : _accent,
               shape: BoxShape.circle,
+              boxShadow: _isRunning
+                  ? []
+                  : [
+                      BoxShadow(
+                          color: Colors.black26, blurRadius: 8.r, offset: Offset(0, 4.h)),
+                    ],
             ),
-            child: const Icon(Icons.lock, size: 32, color: Colors.white),
+            child: Icon(
+              Icons.play_arrow,
+              size: 40.sp,
+              color: _isRunning ? Colors.white.withOpacity(0.5) : Colors.white,
+            ),
           ),
-        const SizedBox(width: 30),
+        ),
+        SizedBox(width: 20.w),
         _circleButton(
             icon: Icons.skip_next, onTap: _skipSession, enabled: _isRunning),
       ],
@@ -1572,17 +1539,17 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     return Opacity(
       opacity: disabled ? 0.4 : 1,
       child: InkWell(
-        borderRadius: BorderRadius.circular(40),
+        borderRadius: BorderRadius.circular(40.r),
         onTap: disabled ? null : onTap,
         child: Container(
-          width: 60,
-          height: 60,
+          width: 60.w,
+          height: 60.w,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey[400]!, width: 2),
+            border: Border.all(color: Colors.grey[400]!, width: 2.w),
             color: Colors.white,
           ),
-          child: Icon(icon, color: Colors.grey[800], size: 30),
+          child: Icon(icon, color: Colors.grey[800], size: 30.sp),
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'onboarding3_page.dart';
 import 'get_started_page.dart';
 
@@ -7,7 +8,6 @@ class Onboarding2Page extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -16,9 +16,9 @@ class Onboarding2Page extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
               child: SizedBox(
-                height: 32,
+                height: 32.h,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
@@ -28,29 +28,29 @@ class Onboarding2Page extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            width: 8,
-                            height: 8,
+                            width: 8.w,
+                            height: 8.h,
                             decoration: BoxDecoration(
                               color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(4.r),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8.w),
                           Container(
-                            width: 24,
-                            height: 8,
+                            width: 24.w,
+                            height: 8.h,
                             decoration: BoxDecoration(
                               color: const Color(0xFFE53935),
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(4.r),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8.w),
                           Container(
-                            width: 8,
-                            height: 8,
+                            width: 8.w,
+                            height: 8.h,
                             decoration: BoxDecoration(
                               color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(4.r),
                             ),
                           ),
                         ],
@@ -66,11 +66,12 @@ class Onboarding2Page extends StatelessWidget {
                                 builder: (context) => const GetStartedPage()),
                           );
                         },
-                        child: const Text(
+                        child: Text(
                           'Skip',
                           style: TextStyle(
-                            color: Color(0xFFE53935),
+                            color: const Color(0xFFE53935),
                             fontWeight: FontWeight.bold,
+                            fontSize: 16.sp,
                           ),
                         ),
                       ),
@@ -84,26 +85,26 @@ class Onboarding2Page extends StatelessWidget {
               children: [
                 Image.asset(
                   'assets/onboarding 2/Group 214.png',
-                  width: size.width * 0.7,
-                  height: size.width * 0.7,
+                  width: 270.w,
+                  height: 270.w,
                 ),
-                const SizedBox(height: 24),
-                const Text(
+                SizedBox(height: 24.h),
+                Text(
                   'Hit Your Targets',
                   style: TextStyle(
-                    fontSize: 32,
+                    fontSize: 32.sp,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFFE53935),
+                    color: const Color(0xFFE53935),
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 32),
+                SizedBox(height: 16.h),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32.w),
                   child: Text(
                     'Stay productive with modes like Classic, Long Study, or Quick Task',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 18.sp,
                       color: Colors.black87,
                     ),
                   ),
@@ -111,12 +112,12 @@ class Onboarding2Page extends StatelessWidget {
               ],
             ),
             Padding(
-              padding: const EdgeInsets.only(bottom: 40),
+              padding: EdgeInsets.only(bottom: 40.h),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE53935),
                   shape: const CircleBorder(),
-                  padding: const EdgeInsets.all(18),
+                  padding: EdgeInsets.all(18.w),
                   elevation: 4,
                 ),
                 onPressed: () {
@@ -128,8 +129,8 @@ class Onboarding2Page extends StatelessWidget {
                 },
                 child: Image.asset(
                   'assets/onboarding 2/arrow button ob2.png',
-                  width: 32,
-                  height: 32,
+                  width: 32.w,
+                  height: 32.w,
                 ),
               ),
             ),

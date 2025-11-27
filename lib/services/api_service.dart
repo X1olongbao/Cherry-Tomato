@@ -161,6 +161,27 @@ class ApiService {
       throw RemoteFailure(message: e.toString());
     }
   }
+
+  /// Delete a task from Supabase by ID
+  Future<bool> deleteTask(String taskId) async {
+    try {
+      await _client
+          .from(Constants.remoteTasksTable)
+          .delete()
+          .eq('id', taskId);
+      Logger.i('Task deleted from Supabase: $taskId');
+      return true;
+    } on PostgrestException catch (e) {
+      Logger.e('Delete task failed: ${e.message}');
+      throw RemoteFailure(message: e.message);
+    } on SocketException {
+      Logger.e('Delete task failed: network connection error');
+      throw const RemoteFailure(message: 'Network connection error');
+    } catch (e) {
+      Logger.e('Delete task failed: $e');
+      throw RemoteFailure(message: e.toString());
+    }
+  }
 }
 
 class RemoteFailure implements Exception {

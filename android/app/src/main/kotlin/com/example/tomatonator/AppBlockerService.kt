@@ -43,6 +43,7 @@ class AppBlockerService : Service() {
     private var dismissTimer: Timer? = null
     private var wm: WindowManager? = null
     private var overlayView: View? = null
+    private var currentBlockedApp: String? = null // Track which app is currently blocked
 
     override fun onCreate() {
         super.onCreate()
@@ -105,29 +106,27 @@ class AppBlockerService : Service() {
         }, 200) // Small delay to ensure service is ready
         
         timer = Timer()
-        // Check more frequently (every 500ms) for better responsiveness
+        // Check more frequently (every 200ms) for better responsiveness
         timer?.scheduleAtFixedRate(object : TimerTask() {
             override fun run() {
                 try {
                     val top = getTopAppPackage()
                     if (top != null && blockedPackages.contains(top)) {
-                        // Show overlay - must run on main thread
+                        // Track this as the currently blocked app
+                        currentBlockedApp = top
+                        // Show overlay immediately - must run on main thread
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                             showOverlay()
                             Log.d("AppBlockerService", "Overlay shown for $top")
                         }
-                    } else {
-                        // Only remove if we're showing overlay for a different app
-                        if (overlayView != null && top != null && !blockedPackages.contains(top)) {
-                            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                removeOverlay()
-                                Log.d("AppBlockerService", "Overlay removed; current $top is not blocked")
-                            }
-                        }
+                    } else if (currentBlockedApp != null && overlayView != null) {
+                        // Keep overlay visible even when switching away from blocked app
+                        // This prevents bypass - overlay stays until user clicks button
+                        Log.v("AppBlockerService", "Keeping overlay visible (current: $top, blocked: $currentBlockedApp)")
                     }
                 } catch (ex: Exception) { Log.w("AppBlockerService", "Monitor loop error: ${ex.message}") }
             }
-        }, 500, 500) // Check every 500ms for faster detection
+        }, 200, 200) // Check every 200ms for faster detection
     }
 
     private fun stopMonitoring() {
@@ -202,7 +201,12 @@ class AppBlockerService : Service() {
                 WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_FULLSCREEN or
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             android.graphics.PixelFormat.TRANSLUCENT
         )
         params.gravity = Gravity.CENTER
@@ -358,6 +362,7 @@ class AppBlockerService : Service() {
             try { wm?.removeView(it) } catch (_: Exception) {}
         }
         overlayView = null
+        currentBlockedApp = null // Clear tracked app when overlay is removed
         Log.d("AppBlockerService", "Overlay removed")
     }
 }
