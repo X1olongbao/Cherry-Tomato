@@ -17,69 +17,70 @@ class Onboarding1Page extends StatelessWidget {
           children: [
             // Centered Progress indicator, Skip on right using Stack
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
-              child: SizedBox(
-                height: 32.h,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Centered progress indicator
-                    Align(
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 24.w,
-                            height: 8.h,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE53935),
-                              borderRadius: BorderRadius.circular(4.r),
-                            ),
-                          ),
-                          SizedBox(width: 8.w),
-                          Container(
-                            width: 8.w,
-                            height: 8.h,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4.r),
-                            ),
-                          ),
-                          SizedBox(width: 8.w),
-                          Container(
-                            width: 8.w,
-                            height: 8.h,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4.r),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Skip button on the right
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            createSmoothRoute(const GetStartedPage()),
-                          );
-                        },
-                        child: Text(
-                          'Skip',
-                          style: TextStyle(
+              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Centered progress indicator
+                  Align(
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 24.w,
+                          height: 8.h,
+                          decoration: BoxDecoration(
                             color: const Color(0xFFE53935),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16.sp,
+                            borderRadius: BorderRadius.circular(4.r),
                           ),
+                        ),
+                        SizedBox(width: 8.w),
+                        Container(
+                          width: 8.w,
+                          height: 8.h,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(4.r),
+                          ),
+                        ),
+                        SizedBox(width: 8.w),
+                        Container(
+                          width: 8.w,
+                          height: 8.h,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(4.r),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Skip button on the right
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          createSmoothRoute(const GetStartedPage()),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                        minimumSize: Size(60.w, 40.h),
+                      ),
+                      child: Text(
+                        'Skip',
+                        style: TextStyle(
+                          color: const Color(0xFFE53935),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16.sp,
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             Column(

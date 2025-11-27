@@ -78,6 +78,23 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
+  Future<void> _showDatePicker() async {
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (ctx) => _CustomCalendarDialog(
+        initialDate: _selectedDate,
+        tasks: widget.tasks,
+      ),
+    );
+    
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _centerSelectedDay());
+    }
+  }
+
   String _monthName(int month) {
     const months = [
       "January",
@@ -444,9 +461,19 @@ class _CalendarPageState extends State<CalendarPage> {
               icon: const Icon(Icons.arrow_back_ios, size: 18),
               onPressed: _goToPreviousDay,
             ),
-            Text(
-              "${_monthName(_selectedDate.month)} ${_selectedDate.day}, ${_selectedDate.year}",
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            GestureDetector(
+              onTap: _showDatePicker,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "${_monthName(_selectedDate.month)} ${_selectedDate.day}, ${_selectedDate.year}",
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.calendar_month, size: 18, color: Colors.grey),
+                ],
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.arrow_forward_ios, size: 18),
@@ -579,6 +606,221 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+// Custom Calendar Dialog with Task Indicators
+class _CustomCalendarDialog extends StatefulWidget {
+  final DateTime initialDate;
+  final List<Task> tasks;
+
+  const _CustomCalendarDialog({
+    required this.initialDate,
+    required this.tasks,
+  });
+
+  @override
+  State<_CustomCalendarDialog> createState() => _CustomCalendarDialogState();
+}
+
+class _CustomCalendarDialogState extends State<_CustomCalendarDialog> {
+  late DateTime _displayedMonth;
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayedMonth = DateTime(widget.initialDate.year, widget.initialDate.month);
+    _selectedDate = widget.initialDate;
+  }
+
+  bool _dateHasTasks(DateTime date) {
+    return widget.tasks.any((task) {
+      if (task.dueAt == null) return false;
+      final taskDate = DateTime.fromMillisecondsSinceEpoch(task.dueAt!);
+      return taskDate.year == date.year &&
+          taskDate.month == date.month &&
+          taskDate.day == date.day;
+    });
+  }
+
+  void _previousMonth() {
+    setState(() {
+      _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month - 1);
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month + 1);
+    });
+  }
+
+  String _monthName(int month) {
+    const months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    return months[month - 1];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final daysInMonth = DateUtils.getDaysInMonth(_displayedMonth.year, _displayedMonth.month);
+    final firstDayOfMonth = DateTime(_displayedMonth.year, _displayedMonth.month, 1);
+    final firstWeekday = firstDayOfMonth.weekday % 7; // 0 = Sunday
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with month/year and navigation
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: _previousMonth,
+                ),
+                Text(
+                  '${_monthName(_displayedMonth.month)} ${_displayedMonth.year}',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: _nextMonth,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Weekday headers
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+                  .map((day) => SizedBox(
+                        width: 40,
+                        child: Center(
+                          child: Text(
+                            day,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 8),
+            
+            // Calendar grid
+            ...List.generate((daysInMonth + firstWeekday + 6) ~/ 7, (weekIndex) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: List.generate(7, (dayIndex) {
+                  final dayNumber = weekIndex * 7 + dayIndex - firstWeekday + 1;
+                  
+                  if (dayNumber < 1 || dayNumber > daysInMonth) {
+                    return const SizedBox(width: 40, height: 40);
+                  }
+                  
+                  final date = DateTime(_displayedMonth.year, _displayedMonth.month, dayNumber);
+                  final isSelected = date.year == _selectedDate.year &&
+                      date.month == _selectedDate.month &&
+                      date.day == _selectedDate.day;
+                  final hasTasks = _dateHasTasks(date);
+                  final isToday = date.year == DateTime.now().year &&
+                      date.month == DateTime.now().month &&
+                      date.day == DateTime.now().day;
+                  
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _selectedDate = date);
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      margin: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFFE53935)
+                            : isToday
+                                ? const Color(0xFFE53935).withOpacity(0.1)
+                                : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: isToday && !isSelected
+                            ? Border.all(color: const Color(0xFFE53935), width: 1)
+                            : null,
+                      ),
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: Text(
+                              '$dayNumber',
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.black,
+                                fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          if (hasTasks)
+                            Positioned(
+                              bottom: 4,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: Container(
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFFE53935),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              );
+            }),
+            
+            const SizedBox(height: 16),
+            
+            // Action buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(_selectedDate),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE53935),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Select'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

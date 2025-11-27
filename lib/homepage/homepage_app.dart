@@ -21,7 +21,8 @@ import '../models/task.dart';
 import '../models/session_type.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../landingpage/onboarding1_page.dart';
-import '../landingpage/app_tutorial_dialog.dart';
+import '../widgets/app_tutorial_manager.dart';
+import '../widgets/task_preset_dialog.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -37,6 +38,15 @@ class _HomepageState extends State<Homepage> {
   final TaskService _taskService = TaskService.instance;
   List<Task> _tasks = [];
   final Set<int> _expandedTaskIndices = <int>{};
+  
+  // GlobalKeys for interactive tutorial
+  final GlobalKey _addTaskButtonKey = GlobalKey();
+  final GlobalKey _taskPlayButtonKey = GlobalKey();
+  final GlobalKey _calendarTabKey = GlobalKey();
+  final GlobalKey _statsTabKey = GlobalKey();
+  final GlobalKey _profileTabKey = GlobalKey();
+  final GlobalKey _historyButtonKey = GlobalKey();
+  final GlobalKey _timerModeKey = GlobalKey();
 
   @override
   void initState() {
@@ -45,7 +55,7 @@ class _HomepageState extends State<Homepage> {
     _handleTaskUpdates();
     unawaited(_taskService.refreshActiveTasks());
     unawaited(_maybeShowOnboarding());
-    unawaited(_maybeShowTutorial());
+    // Removed old text tutorial - now using interactive tutorial
   }
 
   @override
@@ -75,18 +85,7 @@ class _HomepageState extends State<Homepage> {
     await prefs.setBool(key, true);
   }
 
-  Future<void> _maybeShowTutorial() async {
-    final user = AuthService.instance.currentUser;
-    if (user == null) return;
-    
-    // Wait a bit for onboarding to potentially show first
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showAppTutorial(context, user.id);
-    });
-  }
+
 
   String _formatDate(Task task) {
     if (task.dueAt == null) return '--/--/----';
@@ -238,48 +237,63 @@ class _HomepageState extends State<Homepage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(child: _pages[_selectedIndex]),
-      bottomNavigationBar: BottomAppBar(
-        color: Colors.white,
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8.0,
-        child: SizedBox(
-          height: 70,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem("assets/Homepage/Home icon.png", 0),
-              _buildNavItem("assets/Homepage/calendar icon.png", 1),
-              const SizedBox(width: 40),
-              _buildNavItem("assets/Homepage/stats icon.png", 2), // ✅ Stats
-              _buildNavItem("assets/Homepage/profile icon.png", 3),
-            ],
+    final user = AuthService.instance.currentUser;
+    
+    return AppTutorialManager(
+      userId: user?.id ?? '',
+      addTaskButtonKey: _addTaskButtonKey,
+      taskPlayButtonKey: _tasks.isNotEmpty ? _taskPlayButtonKey : null,
+      calendarTabKey: _calendarTabKey,
+      statsTabKey: _statsTabKey,
+      profileTabKey: _profileTabKey,
+      historyButtonKey: _historyButtonKey,
+      timerModeKey: _timerModeKey,
+      onNavigateHome: () {
+        setState(() => _selectedIndex = 0); // Navigate to home tab
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(child: _pages[_selectedIndex]),
+        bottomNavigationBar: BottomAppBar(
+          color: Colors.white,
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8.0,
+          child: SizedBox(
+            height: 70,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNavItem(Icons.home_rounded, 0, null),
+                _buildNavItem(Icons.calendar_today_rounded, 1, _calendarTabKey),
+                const SizedBox(width: 40),
+                _buildNavItem(Icons.bar_chart_rounded, 2, _statsTabKey),
+                _buildNavItem(Icons.person_rounded, 3, _profileTabKey),
+              ],
+            ),
           ),
         ),
-      ),
-      floatingActionButton: SizedBox(
-        width: 90,
-        height: 90,
-        child: FloatingActionButton(
-          backgroundColor: Colors.white,
-          elevation: 3,
-          focusElevation: 0,
-          hoverElevation: 0,
-          highlightElevation: 0,
-          splashColor: Colors.transparent,
-          shape: const CircleBorder(),
-          onPressed: () {
-            // Cherry button intentionally disabled; timer accessible via task cards.
-          },
-          child: Image.asset(
-            "assets/Homepage/pomodoro timer icon.png",
-            fit: BoxFit.contain,
+        floatingActionButton: SizedBox(
+          width: 75,
+          height: 75,
+          child: FloatingActionButton(
+            backgroundColor: Colors.white,
+            elevation: 3,
+            focusElevation: 0,
+            hoverElevation: 0,
+            highlightElevation: 0,
+            splashColor: Colors.transparent,
+            shape: const CircleBorder(),
+            onPressed: () {
+              _showTaskPresetDialog();
+            },
+            child: Image.asset(
+              "assets/Homepage/pomodoro timer icon.png",
+              fit: BoxFit.contain,
+            ),
           ),
         ),
+        floatingActionButtonLocation: const _LoweredCenterDockedFabLocation(),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
@@ -406,6 +420,7 @@ class _HomepageState extends State<Homepage> {
                       color: Colors.black)),
               Row(children: [
                 TextButton(
+                  key: _addTaskButtonKey,
                   onPressed: () async {
                     final created = await Navigator.push<bool>(
                       context,
@@ -556,6 +571,7 @@ class _HomepageState extends State<Homepage> {
                                 ),
                               ),
                               GestureDetector(
+                                key: i == 0 ? _taskPlayButtonKey : null,
                                 onTap: () async {
                                   await Navigator.push(
                                     context,
@@ -696,14 +712,42 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
-  Widget _buildNavItem(String asset, int index) => GestureDetector(
+  Widget _buildNavItem(IconData icon, int index, GlobalKey? key) => GestureDetector(
+        key: key,
         onTap: () => _onItemTapped(index),
-        child: Image.asset(
-          asset,
-          width: 28,
+        child: Icon(
+          icon,
+          size: 28,
           color: _selectedIndex == index ? tomatoRed : Colors.black54,
         ),
       );
+
+  Future<void> _showTaskPresetDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => TaskPresetDialog(
+        onPresetSelected: (preset) async {
+          final presetData = TaskPresetData.fromPreset(preset);
+          final dueDateTime = DateTime.now().add(presetData.dueIn);
+          
+          // Navigate to CreateNewTaskPage with preset data
+          final created = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreateNewTaskPageWithPreset(
+                presetData: presetData,
+                dueDateTime: dueDateTime,
+              ),
+            ),
+          );
+          
+          if (created == true) {
+            unawaited(_taskService.refreshActiveTasks());
+          }
+        },
+      ),
+    );
+  }
 
   Future<void> _showTaskContextMenu(Task task) async {
     await showModalBottomSheet<void>(
@@ -922,4 +966,24 @@ extension on _HomepageState {
       },
     );
 }
+}
+
+
+// Custom FloatingActionButtonLocation to position FAB lower, closer to nav bar
+class _LoweredCenterDockedFabLocation extends FloatingActionButtonLocation {
+  const _LoweredCenterDockedFabLocation();
+  
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    // Center horizontally
+    final double fabX = (scaffoldGeometry.scaffoldSize.width - scaffoldGeometry.floatingActionButtonSize.width) / 2.0;
+    
+    // Position FAB 35 pixels from bottom
+    final double fabY = scaffoldGeometry.scaffoldSize.height - 
+        scaffoldGeometry.floatingActionButtonSize.height - 
+        scaffoldGeometry.minInsets.bottom - 
+        35.0;
+    
+    return Offset(fabX, fabY);
+  }
 }

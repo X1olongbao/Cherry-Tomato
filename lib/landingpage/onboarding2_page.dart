@@ -17,67 +17,68 @@ class Onboarding2Page extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
-              child: SizedBox(
-                height: 32.h,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Align(
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8.w,
-                            height: 8.h,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4.r),
-                            ),
+              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Align(
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8.w,
+                          height: 8.h,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(4.r),
                           ),
-                          SizedBox(width: 8.w),
-                          Container(
-                            width: 24.w,
-                            height: 8.h,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE53935),
-                              borderRadius: BorderRadius.circular(4.r),
-                            ),
-                          ),
-                          SizedBox(width: 8.w),
-                          Container(
-                            width: 8.w,
-                            height: 8.h,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4.r),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            createSmoothRoute(const GetStartedPage()),
-                          );
-                        },
-                        child: Text(
-                          'Skip',
-                          style: TextStyle(
+                        ),
+                        SizedBox(width: 8.w),
+                        Container(
+                          width: 24.w,
+                          height: 8.h,
+                          decoration: BoxDecoration(
                             color: const Color(0xFFE53935),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16.sp,
+                            borderRadius: BorderRadius.circular(4.r),
                           ),
+                        ),
+                        SizedBox(width: 8.w),
+                        Container(
+                          width: 8.w,
+                          height: 8.h,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(4.r),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          createSmoothRoute(const GetStartedPage()),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                        minimumSize: Size(60.w, 40.h),
+                      ),
+                      child: Text(
+                        'Skip',
+                        style: TextStyle(
+                          color: const Color(0xFFE53935),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16.sp,
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             Column(

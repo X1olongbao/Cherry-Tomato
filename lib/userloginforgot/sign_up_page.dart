@@ -112,7 +112,13 @@ class _SignUpPageState extends State<SignUpPage> {
       await googleSignIn.signOut();
       final GoogleSignInAccount? gUser = await googleSignIn.signIn();
       if (gUser == null) {
-        setState(() => _loading = false);
+        // User cancelled the sign-in
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = null; // Don't show error for user cancellation
+          });
+        }
         return;
       }
 
@@ -198,7 +204,9 @@ class _SignUpPageState extends State<SignUpPage> {
         (route) => false,
       );
     } catch (e) {
-      setState(() => _error = 'Google sign-up failed: $e');
+      if (mounted) {
+        setState(() => _error = 'Google sign-up failed: ${e.toString()}');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

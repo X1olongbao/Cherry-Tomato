@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../models/task.dart';
 import '../services/task_service.dart';
+import '../widgets/task_preset_dialog.dart';
 
 class CreateNewTaskPage extends StatefulWidget {
   final Task? task; // ✅ optional task for edit mode
@@ -12,7 +13,54 @@ class CreateNewTaskPage extends StatefulWidget {
   State<CreateNewTaskPage> createState() => _CreateNewTaskPageState();
 }
 
+// Wrapper for preset-based task creation
+class CreateNewTaskPageWithPreset extends StatefulWidget {
+  final TaskPresetData presetData;
+  final DateTime dueDateTime;
+
+  const CreateNewTaskPageWithPreset({
+    super.key,
+    required this.presetData,
+    required this.dueDateTime,
+  });
+
+  @override
+  State<CreateNewTaskPageWithPreset> createState() => _CreateNewTaskPageWithPresetState();
+}
+
+class _CreateNewTaskPageWithPresetState extends State<CreateNewTaskPageWithPreset> {
+  @override
+  Widget build(BuildContext context) {
+    return _CreateNewTaskPageInternal(
+      presetData: widget.presetData,
+      dueDateTime: widget.dueDateTime,
+    );
+  }
+}
+
 class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
+  @override
+  Widget build(BuildContext context) {
+    return _CreateNewTaskPageInternal(task: widget.task);
+  }
+}
+
+class _CreateNewTaskPageInternal extends StatefulWidget {
+  final Task? task;
+  final TaskPresetData? presetData;
+  final DateTime? dueDateTime;
+
+  const _CreateNewTaskPageInternal({
+    this.task,
+    this.presetData,
+    this.dueDateTime,
+  });
+
+  @override
+  State<_CreateNewTaskPageInternal> createState() => _CreateNewTaskPageInternalState();
+}
+
+class _CreateNewTaskPageInternalState extends State<_CreateNewTaskPageInternal> {
   static const List<String> _months = [
     "January",
     "February",
@@ -79,7 +127,15 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
     _title.addListener(() => setState(() {}));
     _date.addListener(() => setState(() {}));
 
-    if (widget.task != null) {
+    // Handle preset data
+    if (widget.presetData != null && widget.dueDateTime != null) {
+      _title.text = widget.presetData!.title;
+      _setDateText(widget.dueDateTime!);
+      _applyTime(widget.dueDateTime!);
+      _priority = priorityToString(widget.presetData!.priority);
+    }
+    // Handle edit mode
+    else if (widget.task != null) {
       final task = widget.task!;
       _title.text = task.title;
       if (task.dueAt != null) {
@@ -92,7 +148,9 @@ class _CreateNewTaskPageState extends State<CreateNewTaskPage> {
         ..clear()
         ..addAll(task.subtasks
             .map((s) => {"id": s.id, "text": s.text, "done": s.done}));
-    } else {
+    }
+    // Default new task
+    else {
       final now = DateTime.now();
       _setDateText(now);
       _applyTime(now);

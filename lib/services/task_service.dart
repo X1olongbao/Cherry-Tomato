@@ -29,9 +29,23 @@ class TaskService {
         .where((t) =>
             t.status == TaskStatus.pending || t.status == TaskStatus.inProgress)
         .toList()
-      ..sort((a, b) => a.dueAt == null || b.dueAt == null
-          ? a.createdAt.compareTo(b.createdAt)
-          : a.dueAt!.compareTo(b.dueAt!));
+      ..sort((a, b) {
+        // Tasks with due dates come first, sorted by due date (earliest first)
+        // Tasks without due dates come last, sorted by creation date
+        if (a.dueAt == null && b.dueAt == null) {
+          // Both have no due date - sort by creation date
+          return a.createdAt.compareTo(b.createdAt);
+        } else if (a.dueAt == null) {
+          // a has no due date, b has due date - b comes first
+          return 1;
+        } else if (b.dueAt == null) {
+          // a has due date, b has no due date - a comes first
+          return -1;
+        } else {
+          // Both have due dates - sort by due date (earliest first)
+          return a.dueAt!.compareTo(b.dueAt!);
+        }
+      });
     activeTasks.value = active;
   }
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tomatonator/services/auth_service.dart';
-import 'package:tomatonator/landingpage/landing_page.dart';
+import 'package:tomatonator/userloginforgot/login_page.dart';
 import 'package:tomatonator/homepage/privacy_security_page.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:tomatonator/homepage/edit_profile_page.dart';
@@ -202,17 +202,55 @@ class _ProfilePageState extends State<ProfilePage> {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () async {
-                    // Capture Navigator and Messenger before the async gap
+                    // Show confirmation dialog
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        title: const Text('Log Out'),
+                        content: const Text('Are you sure you want to log out?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(ctx).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: tomatoRed,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text(
+                              'Log Out',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm != true) return;
+
+                    // Capture Navigator before the async gap
                     final navigator = Navigator.of(context);
                     try {
                       await AuthService.instance.signOut();
                       if (!mounted) return;
+                      // Navigate to login page and clear all routes
                       navigator.pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const LandingPage()),
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
                         (route) => false,
                       );
                     } catch (e) {
                       if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Logout failed: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(

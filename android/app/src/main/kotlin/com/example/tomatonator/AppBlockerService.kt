@@ -40,10 +40,11 @@ class AppBlockerService : Service() {
     private var dismissDurationSeconds: Int = DISMISS_DURATION
     private var dismissEndAt: Long? = null
     private var timer: Timer? = null
-    private var dismissTimer: Timer? = null
+    private var countdownTimer: Timer? = null // Timer for updating countdown display
     private var wm: WindowManager? = null
     private var overlayView: View? = null
     private var currentBlockedApp: String? = null // Track which app is currently blocked
+    private var countdownTextView: TextView? = null // Keep reference to update countdown
 
     override fun onCreate() {
         super.onCreate()
@@ -54,20 +55,36 @@ class AppBlockerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val list = intent?.getStringArrayListExtra(EXTRA_BLOCKED_PACKAGES) ?: arrayListOf()
-        blockedPackages = list.toSet()
+        
+        // If we have new packages, update them; otherwise keep existing ones (for service restart)
+        if (list.isNotEmpty()) {
+            blockedPackages = list.toSet()
+        }
+        
         val provided = intent?.getIntExtra(EXTRA_DISMISS_DURATION, DISMISS_DURATION) ?: DISMISS_DURATION
-        dismissDurationSeconds = if (provided > 0) provided else DISMISS_DURATION
-        dismissEndAt = System.currentTimeMillis() + dismissDurationSeconds * 1000L
+        
+        // Only update duration if provided and valid
+        if (provided > 0) {
+            dismissDurationSeconds = provided
+            dismissEndAt = System.currentTimeMillis() + dismissDurationSeconds * 1000L
+        }
+        
         Log.d("AppBlockerService", "Started with ${blockedPackages.size} blocked packages: $blockedPackages, dismiss in ${dismissDurationSeconds}s")
         startForeground(NOTIFICATION_ID, buildNotification())
-        startMonitoring()
+        
+        // Only restart monitoring if not already running
+        if (timer == null) {
+            startMonitoring()
+        }
+        
+        // Update countdown if overlay is already showing
+        updateCountdownText()
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
         stopMonitoring()
-        cancelDismissTimer()
         removeOverlay()
         Log.d("AppBlockerService", "Service destroyed")
     }
@@ -77,17 +94,27 @@ class AppBlockerService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channel = NotificationChannel(CHANNEL_ID, "App Blocker", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "App Blocker - Focus Mode",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Keeps app blocker active during Pomodoro sessions"
+                setShowBadge(false)
+            }
             nm.createNotificationChannel(channel)
         }
     }
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Cherry Tomato App Blocker")
-            .setContentText("Monitoring foreground apps to block distractions")
+            .setContentTitle("Cherry Tomato - Focus Mode Active")
+            .setContentText("App blocker is protecting your focus time")
             .setSmallIcon(android.R.drawable.stat_notify_more)
             .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
@@ -260,8 +287,9 @@ class AppBlockerService : Service() {
         subLp.topMargin = 8
 
         val countdownText = TextView(this)
+        countdownTextView = countdownText // Store reference
         val remainingSecInitial = ((dismissEndAt ?: System.currentTimeMillis()) - System.currentTimeMillis()).coerceAtLeast(0L) / 1000L
-        countdownText.text = "Dismissing in ${formatHms(remainingSecInitial.toInt())}"
+        countdownText.text = "Session ends in ${formatHms(remainingSecInitial.toInt())}"
         countdownText.setTextColor(Color.argb(255, 150, 150, 150))
         countdownText.textSize = 12f
         val countLp = LinearLayout.LayoutParams(
@@ -303,40 +331,46 @@ class AppBlockerService : Service() {
         overlayView = root
         try {
             wm?.addView(overlayView, params)
-            // Start countdown and auto-dismiss
-            startDismissTimer(countdownText)
+            startCountdownTimer() // Start updating the countdown
             Log.d("AppBlockerService", "Overlay added")
         } catch (ex: Exception) {
             overlayView = null
+            countdownTextView = null
             Log.e("AppBlockerService", "Failed to add overlay: ${ex.message}")
         }
     }
     
-    private fun startDismissTimer(countdownText: TextView) {
-        cancelDismissTimer()
-        dismissTimer = Timer()
-        dismissTimer?.scheduleAtFixedRate(object : TimerTask() {
+    private fun startCountdownTimer() {
+        stopCountdownTimer()
+        countdownTimer = Timer()
+        countdownTimer?.scheduleAtFixedRate(object : TimerTask() {
             override fun run() {
-                val now = System.currentTimeMillis()
-                val endAt = dismissEndAt ?: now
-                val remainingMs = endAt - now
-                val remaining = if (remainingMs > 0) (remainingMs / 1000L).toInt() else 0
-                if (remaining > 0) {
-                    // Update countdown text on main thread
-                    overlayView?.post {
-                        countdownText.text = "Dismissing in ${formatHms(remaining)}"
-                    }
-                } else {
-                    // Auto-dismiss
-                    overlayView?.post {
-                        removeOverlay()
-                    }
-                    Log.d("AppBlockerService", "Overlay auto-dismissed")
-                    cancel()
-                }
+                updateCountdownText()
             }
-        }, 1000, 1000)
-        Log.d("AppBlockerService", "Dismiss timer started")
+        }, 0, 1000) // Update every second
+        Log.d("AppBlockerService", "Countdown timer started")
+    }
+    
+    private fun stopCountdownTimer() {
+        countdownTimer?.cancel()
+        countdownTimer = null
+    }
+    
+    private fun updateCountdownText() {
+        val now = System.currentTimeMillis()
+        val endAt = dismissEndAt ?: now
+        val remainingMs = endAt - now
+        val remaining = if (remainingMs > 0) (remainingMs / 1000L).toInt() else 0
+        
+        // Use Handler to update on main thread
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                countdownTextView?.text = "Session ends in ${formatHms(remaining)}"
+                Log.v("AppBlockerService", "Countdown updated: ${formatHms(remaining)}")
+            } catch (ex: Exception) {
+                Log.w("AppBlockerService", "Failed to update countdown: ${ex.message}")
+            }
+        }
     }
 
     private fun formatHms(seconds: Int): String {
@@ -350,18 +384,13 @@ class AppBlockerService : Service() {
         }
     }
     
-    private fun cancelDismissTimer() {
-        dismissTimer?.cancel()
-        dismissTimer = null
-        Log.v("AppBlockerService", "Dismiss timer cancelled")
-    }
-
     private fun removeOverlay() {
-        cancelDismissTimer()
+        stopCountdownTimer()
         overlayView?.let {
             try { wm?.removeView(it) } catch (_: Exception) {}
         }
         overlayView = null
+        countdownTextView = null
         currentBlockedApp = null // Clear tracked app when overlay is removed
         Log.d("AppBlockerService", "Overlay removed")
     }

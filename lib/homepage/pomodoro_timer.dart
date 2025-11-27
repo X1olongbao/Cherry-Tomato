@@ -182,12 +182,20 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
 
   void _startTicker() {
     _ticker?.cancel();
+    int tickCount = 0;
     _ticker = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted || _endAt == null) return;
       setState(() {
         final diff = _endAt!.difference(DateTime.now());
         _remaining = diff.isNegative ? Duration.zero : diff;
         _maybeTriggerPreAlerts();
+        
+        // Update app blocker service every 10 seconds with remaining time
+        tickCount++;
+        if (tickCount % 10 == 0 && _current == SessionType.pomodoro && _isRunning) {
+          unawaited(_updateAppBlockerDuration());
+        }
+        
         if (_remaining <= Duration.zero) {
           _remaining = Duration.zero;
           _stopTimer();
@@ -252,7 +260,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     isSessionActive = false;
     _focusCheckTimer?.cancel();
     _stopAlarm();
-    unawaited(_stopAppBlocker());
+    // Don't stop app blocker here - only stop when session actually ends or switches
     _persistTimerState();
   }
 
@@ -783,6 +791,12 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   Future<void> _showFocusDialog() async {
     if (_isDialogShowing) return; // prevent multiple stacked dialogs
     _isDialogShowing = true;
+    
+    // PAUSE THE TIMER while dialog is showing
+    if (_isRunning) {
+      _stopTimer();
+    }
+    
     final message = _focusMessages[_rand.nextInt(_focusMessages.length)];
     final title = _focusTitles[_rand.nextInt(_focusTitles.length)];
     
@@ -805,9 +819,30 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
             TextButton(
               onPressed: () async {
                 await _stopAlarm();
-                // End the session and return to homepage
-                _stopTimer();
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                
+                // User not focused - COMPLETELY RESET session
+                _stopTimer();
+                _ticker?.cancel();
+                _ticker = null;
+                _focusCheckTimer?.cancel();
+                _focusCheckTimer = null;
+                
+                // Reset ALL state to initial values
+                setState(() {
+                  _current = SessionType.pomodoro;
+                  _remaining = _durations[SessionType.pomodoro]!;
+                  _completedPomodoros = 0;
+                  _isRunning = false;
+                  isSessionActive = false;
+                  _endAt = null;
+                  _resetPreAlerts();
+                });
+                
+                // Clear persisted cache
+                _clearTimerCache();
+                
+                // Navigate back to home
                 if (mounted) {
                   final payload = {
                     'motivational': true,
@@ -822,6 +857,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
               onPressed: () async {
                 await _stopAlarm();
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                // User is focused - resume timer
+                _startTimer();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _accent,
@@ -849,6 +886,13 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   Future<void> _showFocusCheckDialog() async {
     if (_isDialogShowing) return;
     _isDialogShowing = true;
+    
+    // PAUSE THE TIMER while dialog is showing
+    final wasRunning = _isRunning;
+    if (_isRunning) {
+      _stopTimer();
+    }
+    
     final message = _focusMessages[_rand.nextInt(_focusMessages.length)];
     final title = _focusTitles[_rand.nextInt(_focusTitles.length)];
     
@@ -872,9 +916,14 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
               onPressed: () async {
                 await _stopAlarm();
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                // User not focused - quit session and reset all data
+                // User not focused - COMPLETELY RESET session
                 _stopTimer();
-                // Reset local state to initial values
+                _ticker?.cancel();
+                _ticker = null;
+                _focusCheckTimer?.cancel();
+                _focusCheckTimer = null;
+                
+                // Reset ALL state to initial values
                 setState(() {
                   _current = SessionType.pomodoro;
                   _remaining = _durations[SessionType.pomodoro]!;
@@ -884,8 +933,11 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
                   _endAt = null;
                   _resetPreAlerts();
                 });
-                // Clear persisted cache so next time starts fresh
+                
+                // Clear persisted cache
                 _clearTimerCache();
+                
+                // Navigate back to home
                 if (mounted) {
                   Navigator.of(context).pop();
                 }
@@ -1084,6 +1136,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       if (shouldQuit == true) {
         // User confirmed quit - clear all timer state so they start fresh next time
         _stopTimer();
+        unawaited(_stopAppBlocker()); // Stop app blocker when quitting
         _clearTimerCache();
         // Reset local state to initial values
         setState(() {
@@ -1468,6 +1521,28 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       Logger.i('App blocker: Service start result: $result');
     } catch (e) {
       Logger.e('App blocker: Error starting service: $e');
+    }
+  }
+
+  Future<void> _updateAppBlockerDuration() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool('app_blocker_enabled') ?? false;
+      if (!enabled) return;
+      
+      final pkgs = await _getBlockedPackages();
+      if (pkgs.isEmpty) return;
+      
+      // Update service with current remaining time
+      final dismissDurationSeconds = _remaining.inSeconds;
+      await _blockerChannel.invokeMethod('startAppBlocker', {
+        'packages': pkgs,
+        'dismissDurationSeconds': dismissDurationSeconds,
+      });
+      // Logger.i('App blocker: Updated duration to ${dismissDurationSeconds}s'); // Commented to reduce log spam
+    } catch (e) {
+      Logger.w('App blocker: Error updating duration: $e');
     }
   }
 

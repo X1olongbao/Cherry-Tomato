@@ -47,6 +47,7 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
   final Set<String> _selectedApps = <String>{};
   final Map<String, Uint8List> _appIcons = <String, Uint8List>{};
   bool _isScanning = false;
+  bool _isAppPickerOpen = false; // Flag to prevent multiple dialogs
   List<_InstalledApp> _installedApps = [];
   static const MethodChannel _appsChannel = MethodChannel('com.example.tomatonator/installed_apps');
   static const MethodChannel _blockerChannel = MethodChannel('com.example.tomatonator/installed_apps');
@@ -260,10 +261,18 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
   }
 
   Future<void> _showAppPicker() async {
+    // Prevent multiple dialogs from opening
+    if (_isAppPickerOpen) return;
+    
+    _isAppPickerOpen = true;
+    
     if (_installedApps.isEmpty) {
       await _scanApps();
     }
-    if (!mounted) return;
+    if (!mounted) {
+      _isAppPickerOpen = false;
+      return;
+    }
     final localSearch = TextEditingController();
     await showModalBottomSheet(
       context: context,
@@ -400,13 +409,18 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                             onPressed: () => Navigator.of(ctx).pop(),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFE53935),
+                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                             child: const Text(
                               'Done',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -421,6 +435,9 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
       },
     );
     localSearch.dispose();
+    
+    // Reset flag when dialog closes
+    _isAppPickerOpen = false;
   }
 
   Widget _buildAppCard(_InstalledApp app, StateSetter setSheetState) {
@@ -432,24 +449,24 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
         if (_selfPackages.contains(app.package) || app.name.toLowerCase() == 'cherry tomato') {
           return;
         }
-        setState(() {
-          if (selected) {
-            _selectedApps.remove(app.package);
-          } else {
-            _selectedApps.add(app.package);
-            // Load icon if not already loaded
-            if (!_appIcons.containsKey(app.package)) {
-              _fetchAppIcon(app.package).then((bytes) {
-                if (bytes != null && mounted) {
-                  setState(() {
-                    _appIcons[app.package] = bytes;
-                  });
-                }
-              });
-            }
+        // Update selection state
+        if (selected) {
+          _selectedApps.remove(app.package);
+        } else {
+          _selectedApps.add(app.package);
+          // Load icon if not already loaded
+          if (!_appIcons.containsKey(app.package)) {
+            _fetchAppIcon(app.package).then((bytes) {
+              if (bytes != null && mounted) {
+                setSheetState(() {
+                  _appIcons[app.package] = bytes;
+                });
+              }
+            });
           }
-        });
+        }
         await _saveBlockedApps();
+        // Only update the sheet, not the entire page
         setSheetState(() {});
       },
       child: Container(
@@ -838,6 +855,10 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                                   }
                                   if (mounted) {
                                     await _showAppPicker();
+                                    // Update the main page UI after dialog closes
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
                                   }
                                 },
                                 child: Container(
