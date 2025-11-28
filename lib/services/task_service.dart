@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/task.dart';
 import '../models/session_type.dart';
 import 'auth_service.dart';
+import 'api_service.dart';
 import 'database_service.dart';
 import 'task_reminder_service.dart';
+import '../utilities/logger.dart';
 
 class TaskProgressResult {
   final Task task;
@@ -26,9 +29,23 @@ class TaskService {
         .where((t) =>
             t.status == TaskStatus.pending || t.status == TaskStatus.inProgress)
         .toList()
-      ..sort((a, b) => a.dueAt == null || b.dueAt == null
-          ? a.createdAt.compareTo(b.createdAt)
-          : a.dueAt!.compareTo(b.dueAt!));
+      ..sort((a, b) {
+        // Tasks with due dates come first, sorted by due date (earliest first)
+        // Tasks without due dates come last, sorted by creation date
+        if (a.dueAt == null && b.dueAt == null) {
+          // Both have no due date - sort by creation date
+          return a.createdAt.compareTo(b.createdAt);
+        } else if (a.dueAt == null) {
+          // a has no due date, b has due date - b comes first
+          return 1;
+        } else if (b.dueAt == null) {
+          // a has due date, b has no due date - a comes first
+          return -1;
+        } else {
+          // Both have due dates - sort by due date (earliest first)
+          return a.dueAt!.compareTo(b.dueAt!);
+        }
+      });
     activeTasks.value = active;
   }
 
@@ -108,7 +125,21 @@ class TaskService {
   Future<void> deleteTask(String id) async {
     // Cancel reminders before deleting task
     await TaskReminderService.instance.cancelRemindersForTask(id);
+    
+    // Delete from local database
     await DatabaseService.instance.deleteTask(id);
+    
+    // Delete from Supabase if user is logged in
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null && userId.isNotEmpty) {
+        await ApiService.instance.deleteTask(id);
+      }
+    } catch (e) {
+      Logger.w('Failed to delete task from Supabase: $e');
+      // Continue even if remote delete fails - local delete succeeded
+    }
+    
     await refreshActiveTasks();
   }
 

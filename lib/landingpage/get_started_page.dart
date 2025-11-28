@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../userloginforgot/login_page.dart';
 import '../userloginforgot/sign_up_page.dart';
 
@@ -7,7 +8,6 @@ class GetStartedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
 
     return Scaffold(
         backgroundColor: Colors.white,
@@ -21,28 +21,28 @@ class GetStartedPage extends StatelessWidget {
                   children: [
                     Image.asset(
                       'assets/get started/CHERRY TOMATO LOGO-01 1.png',
-                      width: size.width * 0.7,
-                      height: size.width * 0.7,
+                      width: 270.w,
+                      height: 270.w,
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
+                    SizedBox(height: 8.h),
+                    Text(
                       'Ready to Get \nStarted?',
                       style: TextStyle(
-                        fontSize: 32,
+                        fontSize: 32.sp,
                         fontWeight: FontWeight.bold,
                         color: Colors.black,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 100),
+                    SizedBox(height: 100.h),
                     SizedBox(
-                      width: 200,
-                      height: 48,
+                      width: 200.w,
+                      height: 48.h,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFE53935),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(24.r),
                           ),
                         ),
                         onPressed: () {
@@ -52,12 +52,12 @@ class GetStartedPage extends StatelessWidget {
                                 builder: (context) => const LoginPage()),
                           );
                         },
-                        child: const Text('Log in',
+                        child: Text('Log in',
                             style:
-                                TextStyle(fontSize: 18, color: Colors.white)),
+                                TextStyle(fontSize: 18.sp, color: Colors.white)),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8.h),
                     TextButton(
                       onPressed: () {
                         Navigator.push(
@@ -66,11 +66,12 @@ class GetStartedPage extends StatelessWidget {
                               builder: (context) => const SignUpPage()),
                         );
                       },
-                      child: const Text(
+                      child: Text(
                         'Sign up',
                         style: TextStyle(
-                          color: Color(0xFFE53935),
+                          color: const Color(0xFFE53935),
                           fontWeight: FontWeight.bold,
+                          fontSize: 16.sp,
                         ),
                       ),
                     ),

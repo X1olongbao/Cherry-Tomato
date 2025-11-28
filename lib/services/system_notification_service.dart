@@ -165,12 +165,13 @@ class SystemNotificationService {
       importance: Importance.high,
       priority: Priority.high,
       showWhen: true,
+      playSound: false,
     );
 
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: true,
+      presentSound: false,
     );
 
     const details = NotificationDetails(
@@ -203,12 +204,13 @@ class SystemNotificationService {
       importance: Importance.high,
       priority: Priority.high,
       showWhen: true,
+      playSound: false,
     );
 
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: true,
+      presentSound: false,
     );
 
     const details = NotificationDetails(
@@ -239,12 +241,13 @@ class SystemNotificationService {
       importance: Importance.high,
       priority: Priority.high,
       showWhen: true,
+      playSound: false,
     );
 
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: true,
+      presentSound: false,
     );
 
     const details = NotificationDetails(

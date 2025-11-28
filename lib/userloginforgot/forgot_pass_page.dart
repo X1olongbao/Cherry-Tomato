@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'email_otp_verification_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

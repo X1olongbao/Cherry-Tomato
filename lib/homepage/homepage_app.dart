@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'dart:math' as math;
 import 'create_new_task.dart';
 import 'calendar_page.dart';
@@ -20,6 +21,8 @@ import '../models/task.dart';
 import '../models/session_type.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../landingpage/onboarding1_page.dart';
+import '../widgets/app_tutorial_manager.dart';
+import '../widgets/task_preset_dialog.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -35,6 +38,15 @@ class _HomepageState extends State<Homepage> {
   final TaskService _taskService = TaskService.instance;
   List<Task> _tasks = [];
   final Set<int> _expandedTaskIndices = <int>{};
+  
+  // GlobalKeys for interactive tutorial
+  final GlobalKey _addTaskButtonKey = GlobalKey();
+  final GlobalKey _taskPlayButtonKey = GlobalKey();
+  final GlobalKey _calendarTabKey = GlobalKey();
+  final GlobalKey _statsTabKey = GlobalKey();
+  final GlobalKey _profileTabKey = GlobalKey();
+  final GlobalKey _historyButtonKey = GlobalKey();
+  final GlobalKey _timerModeKey = GlobalKey();
 
   @override
   void initState() {
@@ -43,6 +55,7 @@ class _HomepageState extends State<Homepage> {
     _handleTaskUpdates();
     unawaited(_taskService.refreshActiveTasks());
     unawaited(_maybeShowOnboarding());
+    // Removed old text tutorial - now using interactive tutorial
   }
 
   @override
@@ -71,6 +84,8 @@ class _HomepageState extends State<Homepage> {
     });
     await prefs.setBool(key, true);
   }
+
+
 
   String _formatDate(Task task) {
     if (task.dueAt == null) return '--/--/----';
@@ -135,6 +150,22 @@ class _HomepageState extends State<Homepage> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
+  String _getWelcomeMessage() {
+    final taskCount = _tasks.length;
+    
+    if (taskCount == 0) {
+      return 'Welcome! Ready to start your first goal?';
+    } else if (taskCount == 1) {
+      return 'Great start! You have 1 task. Let\'s make it happen! 🎯';
+    } else if (taskCount <= 3) {
+      return 'You\'re on track with $taskCount tasks. Keep the momentum going! 💪';
+    } else if (taskCount <= 5) {
+      return 'Wow! $taskCount tasks lined up. You\'re crushing it! 🔥';
+    } else {
+      return 'Amazing! $taskCount tasks to conquer. One Pomodoro at a time! 🍅';
+    }
+  }
+
   String _relativeDeadlineText(DateTime deadline) {
     final now = DateTime.now();
     final diff = deadline.difference(now);
@@ -191,54 +222,78 @@ class _HomepageState extends State<Homepage> {
   List<Widget> get _pages => [
         _buildHomeContent(), // 0 → Home
         CalendarPage(tasks: _tasks), // 1 → Calendar
-        StatisticPage(tasks: _tasks), // 2 → Statistics Page with task data
+        StatisticPage(
+          tasks: _tasks,
+          onShowTasks: () => _onItemTapped(0),
+          onShowHistory: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SessionHistoryPage()),
+            );
+          },
+        ), // 2 → Statistics Page
         ProfilePage(onBack: () => _onItemTapped(0)), // 3 → Profile
       ];
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(child: _pages[_selectedIndex]),
-      bottomNavigationBar: BottomAppBar(
-        color: Colors.white,
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8.0,
-        child: SizedBox(
-          height: 70,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem("assets/Homepage/Home icon.png", 0),
-              _buildNavItem("assets/Homepage/calendar icon.png", 1),
-              const SizedBox(width: 40),
-              _buildNavItem("assets/Homepage/stats icon.png", 2), // ✅ Stats
-              _buildNavItem("assets/Homepage/profile icon.png", 3),
-            ],
+    final user = AuthService.instance.currentUser;
+    
+    return AppTutorialManager(
+      userId: user?.id ?? '',
+      addTaskButtonKey: _addTaskButtonKey,
+      taskPlayButtonKey: _tasks.isNotEmpty ? _taskPlayButtonKey : null,
+      calendarTabKey: _calendarTabKey,
+      statsTabKey: _statsTabKey,
+      profileTabKey: _profileTabKey,
+      historyButtonKey: _historyButtonKey,
+      timerModeKey: _timerModeKey,
+      onNavigateHome: () {
+        setState(() => _selectedIndex = 0); // Navigate to home tab
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(child: _pages[_selectedIndex]),
+        bottomNavigationBar: BottomAppBar(
+          color: Colors.white,
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8.0.w,
+          child: SizedBox(
+            height: 70.h,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNavItem(Icons.home_rounded, 0, null),
+                _buildNavItem(Icons.calendar_today_rounded, 1, _calendarTabKey),
+                SizedBox(width: 40.w),
+                _buildNavItem(Icons.bar_chart_rounded, 2, _statsTabKey),
+                _buildNavItem(Icons.person_rounded, 3, _profileTabKey),
+              ],
+            ),
           ),
         ),
-      ),
-      floatingActionButton: SizedBox(
-        width: 90,
-        height: 90,
-        child: FloatingActionButton(
-          backgroundColor: Colors.white,
-          elevation: 3,
-          focusElevation: 0,
-          hoverElevation: 0,
-          highlightElevation: 0,
-          splashColor: Colors.transparent,
-          shape: const CircleBorder(),
-          onPressed: () {
-            // Cherry button intentionally disabled; timer accessible via task cards.
-          },
-          child: Image.asset(
-            "assets/Homepage/pomodoro timer icon.png",
-            fit: BoxFit.contain,
+        floatingActionButton: SizedBox(
+          width: 75.w,
+          height: 75.w,
+          child: FloatingActionButton(
+            backgroundColor: Colors.white,
+            elevation: 3,
+            focusElevation: 0,
+            hoverElevation: 0,
+            highlightElevation: 0,
+            splashColor: Colors.transparent,
+            shape: const CircleBorder(),
+            onPressed: () {
+              _showTaskPresetDialog();
+            },
+            child: Image.asset(
+              "assets/Homepage/pomodoro timer icon.png",
+              fit: BoxFit.contain,
+            ),
           ),
         ),
+        floatingActionButtonLocation: const _LoweredCenterDockedFabLocation(),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
@@ -343,9 +398,9 @@ class _HomepageState extends State<Homepage> {
                 children: [
                   Image.asset('assets/Homepage/goal.png', width: 56),
                   const SizedBox(width: 16),
-                  const Expanded(
-                    child: Text('Welcome! Ready to start your first goal?',
-                        style: TextStyle(
+                  Expanded(
+                    child: Text(_getWelcomeMessage(),
+                        style: const TextStyle(
                             fontSize: 16,
                             color: Colors.black,
                             fontWeight: FontWeight.w500)),
@@ -365,6 +420,7 @@ class _HomepageState extends State<Homepage> {
                       color: Colors.black)),
               Row(children: [
                 TextButton(
+                  key: _addTaskButtonKey,
                   onPressed: () async {
                     final created = await Navigator.push<bool>(
                       context,
@@ -515,21 +571,15 @@ class _HomepageState extends State<Homepage> {
                                 ),
                               ),
                               GestureDetector(
+                                key: i == 0 ? _taskPlayButtonKey : null,
                                 onTap: () async {
-                                  final result = await Navigator.push(
+                                  await Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) =>
                                           PomodoroTimerPage(task: task),
                                     ),
                                   );
-                                  if (result is Map &&
-                                      (result['motivational'] == true)) {
-                                    final msg = (result['message']
-                                            as String?) ??
-                                        'Keep going! Small steps lead to big wins.';
-                                    _showMotivationDialog(msg);
-                                  }
                                 },
                                 child: const Icon(Icons.play_arrow,
                                     color: Colors.red, size: 28),
@@ -662,14 +712,42 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
-  Widget _buildNavItem(String asset, int index) => GestureDetector(
+  Widget _buildNavItem(IconData icon, int index, GlobalKey? key) => GestureDetector(
+        key: key,
         onTap: () => _onItemTapped(index),
-        child: Image.asset(
-          asset,
-          width: 28,
+        child: Icon(
+          icon,
+          size: 28,
           color: _selectedIndex == index ? tomatoRed : Colors.black54,
         ),
       );
+
+  Future<void> _showTaskPresetDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => TaskPresetDialog(
+        onPresetSelected: (preset) async {
+          final presetData = TaskPresetData.fromPreset(preset);
+          final dueDateTime = DateTime.now().add(presetData.dueIn);
+          
+          // Navigate to CreateNewTaskPage with preset data
+          final created = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreateNewTaskPageWithPreset(
+                presetData: presetData,
+                dueDateTime: dueDateTime,
+              ),
+            ),
+          );
+          
+          if (created == true) {
+            unawaited(_taskService.refreshActiveTasks());
+          }
+        },
+      ),
+    );
+  }
 
   Future<void> _showTaskContextMenu(Task task) async {
     await showModalBottomSheet<void>(
@@ -752,6 +830,8 @@ class _HomepageState extends State<Homepage> {
                     );
                     if (confirm == true) {
                       await _taskService.deleteTask(task.id);
+                      // Refresh the task list to update UI
+                      await _taskService.refreshActiveTasks();
                     }
                   },
                 ),
@@ -886,4 +966,25 @@ extension on _HomepageState {
       },
     );
 }
+}
+
+
+// Custom FloatingActionButtonLocation to position FAB lower, closer to nav bar
+class _LoweredCenterDockedFabLocation extends FloatingActionButtonLocation {
+  const _LoweredCenterDockedFabLocation();
+  
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    // Center horizontally
+    final double fabX = (scaffoldGeometry.scaffoldSize.width - scaffoldGeometry.floatingActionButtonSize.width) / 2.0;
+    
+    // Position FAB adaptively from bottom using screenutil
+    // 35.h scales the offset based on screen height for consistent positioning
+    final double fabY = scaffoldGeometry.scaffoldSize.height - 
+        scaffoldGeometry.floatingActionButtonSize.height - 
+        scaffoldGeometry.minInsets.bottom - 
+        35.h;
+    
+    return Offset(fabX, fabY);
+  }
 }

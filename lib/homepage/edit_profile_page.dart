@@ -4,6 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/services/profile_service.dart';
+import 'package:tomatonator/services/notification_service.dart';
+import 'package:tomatonator/models/app_notification.dart';
+import 'package:uuid/uuid.dart';
 import 'package:tomatonator/userloginforgot/email_otp_verification_page.dart';
 
 const tomatoRed = Color(0xFFE53935);
@@ -18,12 +21,12 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
-  final _emailController = TextEditingController();
   final _imagePicker = ImagePicker();
   bool _isLoading = false;
   bool _isSaving = false;
   String? _avatarUrl;
   File? _selectedImage;
+  String? _originalUsername;
 
   @override
   void initState() {
@@ -36,19 +39,32 @@ class _EditProfilePageState extends State<EditProfilePage> {
     try {
       final user = AuthService.instance.currentUser;
       if (user != null) {
-        _usernameController.text = user.username ?? '';
-        _emailController.text = user.email ?? '';
-        
-        // Load avatar URL from profiles table
+        // Load username and avatar URL from profiles table
         final supabase = Supabase.instance.client;
         final profile = await supabase
             .from('profiles')
-            .select('avatar_url')
+            .select('username, avatar_url')
             .eq('id', user.id)
             .maybeSingle();
         
-        if (profile != null && profile['avatar_url'] != null) {
-          _avatarUrl = profile['avatar_url'] as String;
+        if (profile != null) {
+          // Load username from profiles table (this matches what's displayed)
+          if (profile['username'] != null) {
+            _usernameController.text = (profile['username'] as String).trim();
+            _originalUsername = _usernameController.text;
+          } else {
+            // Fallback to auth metadata if not in profiles table
+            _usernameController.text = user.username ?? '';
+            _originalUsername = _usernameController.text;
+          }
+          
+          if (profile['avatar_url'] != null) {
+            _avatarUrl = profile['avatar_url'] as String;
+          }
+        } else {
+          // If no profile exists, use auth metadata
+          _usernameController.text = user.username ?? '';
+          _originalUsername = _usernameController.text;
         }
       }
     } catch (e) {
@@ -117,7 +133,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       final supabase = Supabase.instance.client;
       final username = _usernameController.text.trim();
-      final email = _emailController.text.trim();
 
       // Upload image if selected
       String? avatarUrl = _avatarUrl;
@@ -146,25 +161,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }
       }
 
-      // If email was changed, require OTP 2FA before initiating change
-      if (email.isNotEmpty && email != user.email) {
-        await supabase.auth.signInWithOtp(email: user.email!, shouldCreateUser: false);
-        if (!mounted) return;
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => EmailOtpVerificationPage(
-              otpContext: OtpContext(flow: OtpFlow.changeEmail, email: user.email!, newEmail: email),
-            ),
-          ),
-        );
-        if (result != true) {
-          // Abort save if OTP was not verified
-          setState(() => _isSaving = false);
-          return;
-        }
-      }
-
       // Update user metadata with username
       await supabase.auth.updateUser(
         UserAttributes(data: {'username': username}),
@@ -173,7 +169,30 @@ class _EditProfilePageState extends State<EditProfilePage> {
       // Refresh profile service
       await ProfileService.instance.refreshCurrentUserProfile();
 
+      // Add notification if username was changed
+      if (username.isNotEmpty && username != _originalUsername) {
+        NotificationService.instance.add(
+          AppNotification(
+            id: const Uuid().v4(),
+            title: 'Profile Updated',
+            message: 'You successfully changed your username to "$username"',
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+
       if (!mounted) return;
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated successfully!'),
+          backgroundColor: tomatoRed,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -187,7 +206,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   void dispose() {
     _usernameController.dispose();
-    _emailController.dispose();
     super.dispose();
   }
 
@@ -334,35 +352,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           )
                         ],
                       ),
-                      child: TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          hintText: 'Enter email',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.email_outlined, color: Colors.black54),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              AuthService.instance.currentUser?.email ?? 'No email',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                          filled: true,
-                          fillColor: Colors.grey[50],
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                          prefixIcon: const Icon(
-                            Icons.email_outlined,
-                            color: Colors.black54,
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Email is required';
-                          }
-                          if (!value.contains('@') || !value.contains('.')) {
-                            return 'Please enter a valid email';
-                          }
-                          return null;
-                        },
+                        ],
                       ),
                     ),
                     const SizedBox(height: 40),

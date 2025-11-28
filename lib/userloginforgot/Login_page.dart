@@ -1,5 +1,6 @@
 // ignore_for_file: file_names
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:tomatonator/services/auth_service.dart';
 import 'package:tomatonator/homepage/homepage_app.dart';
 import 'package:tomatonator/userloginforgot/email_otp_verification_page.dart';
@@ -48,8 +49,8 @@ class _LoginPageState extends State<LoginPage> {
 
   ButtonStyle get _continueStyle => ElevatedButton.styleFrom(
         elevation: 0,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        padding: EdgeInsets.symmetric(vertical: 16.h),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
         foregroundColor: Colors.white,
       ).copyWith(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
@@ -81,9 +82,10 @@ class _LoginPageState extends State<LoginPage> {
         }
       } catch (_) {}
       if (!mounted) return;
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const Homepage()),
+        (route) => false,
       );
     } on AuthFailure catch (e) {
       setState(() => _error = e.message);
@@ -99,14 +101,23 @@ class _LoginPageState extends State<LoginPage> {
   // Google Sign-In via Firebase, then go to Homepage on success.
   Future<void> _googleLogin() async {
     if (_loading) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       // Force account picker by clearing cached selection first.
       final googleSignIn = GoogleSignIn();
       await googleSignIn.signOut(); // or: await googleSignIn.disconnect();
       final GoogleSignInAccount? gUser = await googleSignIn.signIn();
       if (gUser == null) {
-        setState(() => _loading = false);
+        // User cancelled the sign-in
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = null; // Don't show error for user cancellation
+          });
+        }
         return; // aborted
       }
       
@@ -191,14 +202,26 @@ class _LoginPageState extends State<LoginPage> {
       if (Supabase.instance.client.auth.currentUser == null) {
         throw Exception('Logged into Google (Firebase) but not into Supabase');
       }
+      
+      // Mark onboarding as seen for this user
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final uid = Supabase.instance.client.auth.currentUser?.id;
+        if (uid != null && uid.isNotEmpty) {
+          await prefs.setBool('seen_onboarding_v1_$uid', true);
+        }
+      } catch (_) {}
+      
       if (!mounted) return;
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const Homepage()),
+        (route) => false,
       );
     } catch (e) {
-      setState(() => _error = 'Google sign-in failed: $e');
-      if (mounted) {}
+      if (mounted) {
+        setState(() => _error = 'Google sign-in failed: ${e.toString()}');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -207,11 +230,11 @@ class _LoginPageState extends State<LoginPage> {
   InputDecoration _fieldDecoration(String hint) => InputDecoration(
         hintText: hint,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
         filled: true,
         fillColor: const Color(0xFFF5F5F5),
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(12.r),
             borderSide: BorderSide.none),
       );
 
@@ -227,12 +250,12 @@ class _LoginPageState extends State<LoginPage> {
             children: [
               Text(label,
                   style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 20.sp,
                       fontWeight: FontWeight.bold,
                       color: active ? tomatoRed : Colors.grey[400])),
               Container(
-                  height: 3,
-                  margin: const EdgeInsets.only(top: 4),
+                  height: 3.h,
+                  margin: EdgeInsets.only(top: 4.h),
                   color: active ? tomatoRed : Colors.transparent),
             ],
           ),
@@ -245,11 +268,11 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: 24.w),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 48),
+              SizedBox(height: 48.h),
               Row(children: [
                 _buildTopTab(label: 'Log in', active: true, onTap: () {}),
                 _buildTopTab(
@@ -268,19 +291,19 @@ class _LoginPageState extends State<LoginPage> {
                   },
                 ),
               ]),
-              const SizedBox(height: 40),
-              const Padding(
-                  padding: EdgeInsets.only(left: 8.0, bottom: 6),
+              SizedBox(height: 40.h),
+              Padding(
+                  padding: EdgeInsets.only(left: 8.w, bottom: 6.h),
                   child: Text('Email',
-                      style: TextStyle(fontSize: 16, color: Colors.black))),
+                      style: TextStyle(fontSize: 16.sp, color: Colors.black))),
               TextField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   decoration: _fieldDecoration('Enter your email')),
-              const Padding(
-                  padding: EdgeInsets.only(left: 8.0, top: 28, bottom: 6),
+              Padding(
+                  padding: EdgeInsets.only(left: 8.w, top: 28.h, bottom: 6.h),
                   child: Text('Password',
-                      style: TextStyle(fontSize: 16, color: Colors.black))),
+                      style: TextStyle(fontSize: 16.sp, color: Colors.black))),
               TextField(
                   controller: _passwordCtrl,
                   obscureText: !_showPassword,
@@ -289,6 +312,7 @@ class _LoginPageState extends State<LoginPage> {
                       icon: Icon(
                         _showPassword ? Icons.visibility : Icons.visibility_off,
                         color: Colors.grey,
+                        size: 24.sp,
                       ),
                       onPressed: () => setState(() => _showPassword = !_showPassword),
                     ),
@@ -302,9 +326,9 @@ class _LoginPageState extends State<LoginPage> {
                           builder: (_) => const ForgotPasswordPage())),
                   style: TextButton.styleFrom(
                       foregroundColor: tomatoRed,
-                      textStyle: const TextStyle(fontSize: 16)),
-                  child: const Text('Forgot Password?',
-                      style: TextStyle(color: tomatoRed, fontSize: 16)),
+                      textStyle: TextStyle(fontSize: 16.sp)),
+                  child: Text('Forgot Password?',
+                      style: TextStyle(color: tomatoRed, fontSize: 16.sp)),
                 ),
               ),
               SizedBox(
@@ -313,69 +337,69 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: _allFilled && !_loading ? _handleLogin : null,
                   style: _continueStyle,
                   child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
+                      ? SizedBox(
+                          height: 20.h,
+                          width: 20.w,
+                          child: const CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Text('Continue',
+                      : Text('Continue',
                           style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16)),
+                              fontWeight: FontWeight.bold, fontSize: 16.sp)),
                 ),
               ),
-              const SizedBox(height: 32),
-              const Row(children: [
-                Expanded(
+              SizedBox(height: 32.h),
+              Row(children: [
+                const Expanded(
                     child: Divider(color: Color(0xFFBDBDBD), thickness: 1)),
                 Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    padding: EdgeInsets.symmetric(horizontal: 8.w),
                     child:
-                        Text('Or', style: TextStyle(color: Color(0xFFBDBDBD)))),
-                Expanded(
+                        Text('Or', style: TextStyle(color: const Color(0xFFBDBDBD), fontSize: 14.sp))),
+                const Expanded(
                     child: Divider(color: Color(0xFFBDBDBD), thickness: 1)),
               ]),
-              const SizedBox(height: 40),
+              SizedBox(height: 40.h),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: _googleLogin,
                   icon: Image.asset('assets/login page/devicon_google.png',
-                      width: 24, height: 24),
-                  label: const Text('Continue with Google',
+                      width: 24.w, height: 24.h),
+                  label: Text('Continue with Google',
                       style: TextStyle(
                           color: Colors.black,
                           fontWeight: FontWeight.bold,
-                          fontSize: 16)),
+                          fontSize: 16.sp)),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: EdgeInsets.symmetric(vertical: 14.h),
                     side: const BorderSide(color: Colors.black54, width: 1),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28)),
+                        borderRadius: BorderRadius.circular(28.r)),
                   ),
                 ),
               ),
               if (_error != null) ...[
-                const SizedBox(height: 16),
+                SizedBox(height: 16.h),
                 Row(
                   children: [
-                    const Icon(Icons.error_outline, color: tomatoRed),
-                    const SizedBox(width: 8),
+                    Icon(Icons.error_outline, color: tomatoRed, size: 20.sp),
+                    SizedBox(width: 8.w),
                     Expanded(
                       child: Text(
                         _error!,
-                        style: const TextStyle(color: tomatoRed),
+                        style: TextStyle(color: tomatoRed, fontSize: 14.sp),
                       ),
                     ),
                   ],
                 ),
               ],
-              const SizedBox(height: 16),
+              SizedBox(height: 16.h),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text('Don\'t have an account? ',
-                    style: TextStyle(color: Colors.grey, fontSize: 16)),
+                Text('Don\'t have an account? ',
+                    style: TextStyle(color: Colors.grey, fontSize: 16.sp)),
                 TextButton(
                   onPressed: () => Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const SignUpPage())),
@@ -383,14 +407,14 @@ class _LoginPageState extends State<LoginPage> {
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                  child: const Text('Sign up',
+                  child: Text('Sign up',
                       style: TextStyle(
                           color: tomatoRed,
-                          fontSize: 16,
+                          fontSize: 16.sp,
                           fontWeight: FontWeight.bold)),
                 ),
               ]),
-              const SizedBox(height: 24),
+              SizedBox(height: 24.h),
             ],
           ),
         ),

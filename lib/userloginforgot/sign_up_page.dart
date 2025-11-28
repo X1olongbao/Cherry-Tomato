@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:math';
 import 'package:tomatonator/homepage/homepage_app.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 const Color tomatoRed = Color(0xFFE53935);
 
@@ -35,10 +36,13 @@ class _SignUpPageState extends State<SignUpPage> {
 
   void _onChanged() => setState(() {});
 
-  bool get _allFilled =>
+  bool get _isPasswordValid => _passwordCtrl.text.length >= 8;
+
+  bool get _canContinue =>
       _usernameCtrl.text.isNotEmpty &&
       _emailCtrl.text.isNotEmpty &&
-      _passwordCtrl.text.isNotEmpty;
+      _isPasswordValid &&
+      !_loading;
 
   // Send OTP via Supabase and navigate to OTP verification.
   Future<void> _handleSignup() async {
@@ -51,6 +55,11 @@ class _SignUpPageState extends State<SignUpPage> {
       final email = _emailCtrl.text.trim();
       final username = _usernameCtrl.text.trim();
       final password = _passwordCtrl.text;
+
+      if (!_isPasswordValid) {
+        setState(() => _error = 'Password must be at least 8 characters.');
+        return;
+      }
 
       // Use Supabase's built-in OTP functionality
       final supabase = Supabase.instance.client;
@@ -103,7 +112,13 @@ class _SignUpPageState extends State<SignUpPage> {
       await googleSignIn.signOut();
       final GoogleSignInAccount? gUser = await googleSignIn.signIn();
       if (gUser == null) {
-        setState(() => _loading = false);
+        // User cancelled the sign-in
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = null; // Don't show error for user cancellation
+          });
+        }
         return;
       }
 
@@ -183,12 +198,15 @@ class _SignUpPageState extends State<SignUpPage> {
           await prefs.setBool('seen_onboarding_v1_${user.id}', true);
         }
       } catch (_) {}
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const Homepage()),
+        (route) => false,
       );
     } catch (e) {
-      setState(() => _error = 'Google sign-up failed: $e');
+      if (mounted) {
+        setState(() => _error = 'Google sign-up failed: ${e.toString()}');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -204,20 +222,28 @@ class _SignUpPageState extends State<SignUpPage> {
 
   InputDecoration _fieldDecoration(String hint) => InputDecoration(
         hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14.sp),
+        contentPadding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
         filled: true,
         fillColor: const Color(0xFFF5F5F5),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.r),
           borderSide: BorderSide.none,
+        ),
+      );
+
+  Widget _fieldLabel(String text) => Padding(
+        padding: EdgeInsets.only(left: 8.w, bottom: 6.h),
+        child: Text(
+          text,
+          style: TextStyle(fontSize: 16.sp, color: Colors.black),
         ),
       );
 
   ButtonStyle get _continueStyle => ElevatedButton.styleFrom(
         elevation: 0,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        padding: EdgeInsets.symmetric(vertical: 16.h),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
         foregroundColor: Colors.white,
       ).copyWith(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
@@ -242,14 +268,14 @@ class _SignUpPageState extends State<SignUpPage> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 20.sp,
                 fontWeight: FontWeight.bold,
                 color: active ? tomatoRed : Colors.grey[400],
               ),
             ),
             Container(
-              height: 3,
-              margin: const EdgeInsets.only(top: 4),
+              height: 3.h,
+              margin: EdgeInsets.only(top: 4.h),
               color: active ? tomatoRed : Colors.transparent,
             )
           ],
@@ -264,11 +290,11 @@ class _SignUpPageState extends State<SignUpPage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: 24.w),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 48),
+              SizedBox(height: 48.h),
               Row(
                 children: [
                   _buildTopTab(
@@ -295,47 +321,29 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 40),
+              SizedBox(height: 40.h),
 
               // Username
-              const Padding(
-                padding: EdgeInsets.only(left: 8.0, bottom: 6),
-                child: Text(
-                  'Username',
-                  style: TextStyle(fontSize: 16, color: Colors.black),
-                ),
-              ),
+              _fieldLabel('Username'),
               TextField(
                 controller: _usernameCtrl,
                 decoration: _fieldDecoration('Enter your username'),
               ),
 
-              const SizedBox(height: 28),
+              SizedBox(height: 28.h),
 
               // Email
-              const Padding(
-                padding: EdgeInsets.only(left: 8.0, bottom: 6),
-                child: Text(
-                  'Email',
-                  style: TextStyle(fontSize: 16, color: Colors.black),
-                ),
-              ),
+              _fieldLabel('Email'),
               TextField(
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
                 decoration: _fieldDecoration('Enter your email'),
               ),
 
-              const SizedBox(height: 28),
+              SizedBox(height: 28.h),
 
               // Password
-              const Padding(
-                padding: EdgeInsets.only(left: 8.0, bottom: 6),
-                child: Text(
-                  'Password',
-                  style: TextStyle(fontSize: 16, color: Colors.black),
-                ),
-              ),
+              _fieldLabel('Password'),
               TextField(
                 controller: _passwordCtrl,
                 obscureText: !_showPassword,
@@ -349,14 +357,22 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                 ),
               ),
+              if (_passwordCtrl.text.isNotEmpty && !_isPasswordValid)
+                Padding(
+                  padding: EdgeInsets.only(left: 8.w, top: 6.h),
+                  child: Text(
+                    'Password must be at least 8 characters.',
+                    style: TextStyle(color: tomatoRed, fontSize: 13.sp),
+                  ),
+                ),
 
-              const SizedBox(height: 40),
+              SizedBox(height: 40.h),
 
               // Continue button – integrates Supabase signup
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _allFilled && !_loading ? _handleSignup : null,
+                  onPressed: _canContinue ? _handleSignup : null,
                   style: _continueStyle,
                   child: _loading
                       ? const SizedBox(
@@ -367,23 +383,23 @@ class _SignUpPageState extends State<SignUpPage> {
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Text(
+                      : Text(
                           'Continue',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontSize: 16.sp,
                           ),
                         ),
                 ),
               ),
 
-              const SizedBox(height: 15),
+              SizedBox(height: 15.h),
 
               if (_error != null) ...[
                 Row(
                   children: [
                     const Icon(Icons.error_outline, color: tomatoRed),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8.w),
                     Expanded(
                       child: Text(
                         _error!,
@@ -392,11 +408,11 @@ class _SignUpPageState extends State<SignUpPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 15),
+                SizedBox(height: 15.h),
               ],
 
               // OR divider
-              const Row(
+              Row(
                 children: [
                   Expanded(
                     child: Divider(
@@ -405,10 +421,10 @@ class _SignUpPageState extends State<SignUpPage> {
                     ),
                   ),
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    padding: EdgeInsets.symmetric(horizontal: 8.w),
                     child: Text(
                       'Or',
-                      style: TextStyle(color: Color(0xFFBDBDBD)),
+                      style: TextStyle(color: const Color(0xFFBDBDBD), fontSize: 14.sp),
                     ),
                   ),
                   Expanded(
@@ -420,7 +436,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ],
               ),
 
-              const SizedBox(height: 15),
+              SizedBox(height: 15.h),
 
               // Google button (placeholder asset)
               SizedBox(
@@ -428,10 +444,10 @@ class _SignUpPageState extends State<SignUpPage> {
                 child: OutlinedButton.icon(
                   onPressed: _loading ? null : _googleSignup,
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: EdgeInsets.symmetric(vertical: 14.h),
                     side: const BorderSide(color: Colors.black54, width: 1),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(28.r),
                     ),
                   ),
                   icon: Image.asset(
@@ -439,26 +455,26 @@ class _SignUpPageState extends State<SignUpPage> {
                     width: 24,
                     height: 24,
                   ),
-                  label: const Text(
+                  label: Text(
                     'Continue with Google',
                     style: TextStyle(
                       color: Colors.black,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 16.sp,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: 24.h),
 
               // Bottom link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
+                  Text(
                     'Already have an account? ',
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
+                    style: TextStyle(color: Colors.grey, fontSize: 16.sp),
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
@@ -467,11 +483,11 @@ class _SignUpPageState extends State<SignUpPage> {
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: const Text(
+                    child: Text(
                       'Log in',
                       style: TextStyle(
                         color: tomatoRed,
-                        fontSize: 16,
+                        fontSize: 16.sp,
                         fontWeight: FontWeight.normal,
                       ),
                     ),
@@ -479,7 +495,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ],
               ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: 24.h),
             ],
           ),
         ),
