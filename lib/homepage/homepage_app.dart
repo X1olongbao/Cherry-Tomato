@@ -257,15 +257,15 @@ class _HomepageState extends State<Homepage> {
         bottomNavigationBar: BottomAppBar(
           color: Colors.white,
           shape: const CircularNotchedRectangle(),
-          notchMargin: 8.0,
+          notchMargin: 8.0.w,
           child: SizedBox(
-            height: 70,
+            height: 70.h,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildNavItem(Icons.home_rounded, 0, null),
                 _buildNavItem(Icons.calendar_today_rounded, 1, _calendarTabKey),
-                const SizedBox(width: 40),
+                SizedBox(width: 40.w),
                 _buildNavItem(Icons.bar_chart_rounded, 2, _statsTabKey),
                 _buildNavItem(Icons.person_rounded, 3, _profileTabKey),
               ],
@@ -273,8 +273,8 @@ class _HomepageState extends State<Homepage> {
           ),
         ),
         floatingActionButton: SizedBox(
-          width: 75,
-          height: 75,
+          width: 75.w,
+          height: 75.w,
           child: FloatingActionButton(
             backgroundColor: Colors.white,
             elevation: 3,
@@ -978,11 +978,12 @@ class _LoweredCenterDockedFabLocation extends FloatingActionButtonLocation {
     // Center horizontally
     final double fabX = (scaffoldGeometry.scaffoldSize.width - scaffoldGeometry.floatingActionButtonSize.width) / 2.0;
     
-    // Position FAB 35 pixels from bottom
+    // Position FAB adaptively from bottom using screenutil
+    // 35.h scales the offset based on screen height for consistent positioning
     final double fabY = scaffoldGeometry.scaffoldSize.height - 
         scaffoldGeometry.floatingActionButtonSize.height - 
         scaffoldGeometry.minInsets.bottom - 
-        35.0;
+        35.h;
     
     return Offset(fabX, fabY);
   }

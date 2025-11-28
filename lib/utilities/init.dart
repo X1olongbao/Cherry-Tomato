@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -17,42 +18,83 @@ import 'logger.dart';
 Future<void> initializeBackend() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase (for OTP and Google Sign-In)
+  // Initialize Firebase (for OTP and Google Sign-In) with timeout
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        Logger.w('Firebase initialization timed out');
+        throw TimeoutException('Firebase init timeout');
+      },
+    );
     Logger.i('Firebase initialized');
   } catch (e) {
     Logger.e('Firebase initialization failed: $e');
   }
 
-  // Initialize Supabase client
+  // Initialize Supabase client with timeout
   try {
     await Supabase.initialize(
       url: Constants.supabaseUrl,
       anonKey: Constants.supabaseAnonKey,
       authFlowType: AuthFlowType.pkce,
+    ).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        Logger.w('Supabase initialization timed out');
+        throw TimeoutException('Supabase init timeout');
+      },
     );
-    // Load profile for current user (if any)
-    await ProfileService.instance.refreshCurrentUserProfile();
+    
+    // Load profile for current user (if any) - non-blocking
+    ProfileService.instance.refreshCurrentUserProfile().timeout(
+      const Duration(seconds: 5),
+    ).catchError((e) {
+      Logger.w('Profile refresh failed during init: $e');
+    });
+    
     Logger.i('Supabase initialized');
   } catch (e) {
     Logger.e('Supabase initialization failed: $e');
   }
 
-  // Initialize local database
-  await DatabaseService.instance.init();
+  // Initialize local database with timeout
+  try {
+    await DatabaseService.instance.init().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        Logger.e('Database initialization timed out');
+        throw TimeoutException('Database init timeout');
+      },
+    );
+  } catch (e) {
+    Logger.e('Database initialization failed: $e');
+  }
 
-  // Initialize notification service
-  await SystemNotificationService.instance.init();
+  // Initialize notification service (non-blocking)
+  SystemNotificationService.instance.init().catchError((e) {
+    Logger.e('Notification service init failed: $e');
+  });
 
-  // Start task reminder service
-  TaskReminderService.instance.start();
+  // Start task reminder service (non-blocking)
+  try {
+    TaskReminderService.instance.start();
+  } catch (e) {
+    Logger.e('Task reminder service failed: $e');
+  }
 
-  // Schedule daily general reminder
-  await SystemNotificationService.instance.scheduleDailyReminder();
+  // Schedule daily general reminder (non-blocking)
+  SystemNotificationService.instance.scheduleDailyReminder().catchError((e) {
+    Logger.e('Daily reminder scheduling failed: $e');
+  });
 
   // Start connectivity-based sync service
-  SyncService.instance.start();
+  try {
+    SyncService.instance.start();
+  } catch (e) {
+    Logger.e('Sync service failed: $e');
+  }
+  
   Logger.i('Backend services started');
 
   // Optionally listen to auth changes to trigger sync after login/logout

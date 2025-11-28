@@ -55,8 +55,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     SessionType.longBreak: const Duration(minutes: 15),
   };
   PresetMode _presetMode = PresetMode.classic;
-  // Focus check interval: every 15 seconds (TRIAL MODE - change back to minutes: 7 for production)
-  static const Duration _focusCheckInterval = Duration(seconds: 15);
+  // Focus check interval: every 7 minutes during Pomodoro sessions
+  static const Duration _focusCheckInterval = Duration(minutes: 7);
 
   Timer? _ticker;
   Duration _remaining = const Duration(minutes: 25);
@@ -236,19 +236,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     _scheduleFocusCheck();
     if (_current == SessionType.pomodoro) {
       unawaited(_startAppBlockerIfConfigured());
-      // Notify Pomodoro start
-      unawaited(SystemNotificationService.instance.notifyPomodoroStart(
-        taskName: widget.task?.title,
-      ));
     } else {
       unawaited(_stopAppBlocker());
-      // Notify break start
-      final breakType = _current == SessionType.shortBreak ? 'Short' : 'Long';
-      final durationMinutes = _durations[_current]!.inMinutes;
-      unawaited(SystemNotificationService.instance.notifyBreakStart(
-        breakType: breakType,
-        durationMinutes: durationMinutes,
-      ));
     }
     _startTicker();
   }
@@ -369,23 +358,21 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   Future<void> _onSkipComplete() async {
     // Save current session as skipped, then advance to next with continuous flow
     final typeBefore = _current;
-    try {
-      final durationMinutes = _durations[typeBefore]!.inMinutes;
-      await SessionService.instance.recordCompletedSession(
-        sessionType: typeBefore,
-        durationMinutes: durationMinutes,
-        task: widget.task,
-        presetMode: _presetMode.name,
-      );
-      if (mounted) {}
-    } catch (e) {
+    
+    // Record session in background without blocking UI
+    final durationMinutes = _durations[typeBefore]!.inMinutes;
+    unawaited(SessionService.instance.recordCompletedSession(
+      sessionType: typeBefore,
+      durationMinutes: durationMinutes,
+      task: widget.task,
+      presetMode: _presetMode.name,
+    ).catchError((e) {
       Logger.e('Failed to record skipped session: $e');
-      if (mounted) {}
-    }
+    }));
 
-    // Continuous flow behavior
+    // Continuous flow behavior - update UI immediately
     if (typeBefore == SessionType.pomodoro) {
-      // Skip Pomodoro → go to appropriate break, play 5s alarm, start break
+      // Skip Pomodoro → go to appropriate break, play alarm, start break
       _completedPomodoros++;
       _playAlarmForFiveSeconds();
       if (_completedPomodoros % 4 == 0) {
@@ -797,6 +784,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       _stopTimer();
     }
     
+    // Keep app blocker active during decision time
+    
     final message = _focusMessages[_rand.nextInt(_focusMessages.length)];
     final title = _focusTitles[_rand.nextInt(_focusTitles.length)];
     
@@ -857,8 +846,9 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
               onPressed: () async {
                 await _stopAlarm();
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                // User is focused - resume timer
+                // User is focused - resume timer and app blocker
                 _startTimer();
+                unawaited(_startAppBlockerIfConfigured());
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _accent,
@@ -892,6 +882,8 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     if (_isRunning) {
       _stopTimer();
     }
+    
+    // Keep app blocker active during decision time
     
     final message = _focusMessages[_rand.nextInt(_focusMessages.length)];
     final title = _focusTitles[_rand.nextInt(_focusTitles.length)];
@@ -949,9 +941,10 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
               onPressed: () async {
                 await _stopAlarm();
                 if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                // User is focused - continue to next Pomodoro
+                // User is focused - continue to next Pomodoro and restart app blocker
                 _switchSession(SessionType.pomodoro);
                 _startTimer();
+                unawaited(_startAppBlockerIfConfigured());
                 _isDialogShowing = false;
               },
               style: ElevatedButton.styleFrom(
@@ -1050,6 +1043,26 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
     try {
       // Ensure a clean state before starting loop
       await _alarmPlayer!.stop();
+      
+      // Set audio context to bypass silent/vibrate mode
+      await _alarmPlayer!.setAudioContext(
+        const AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: [
+              AVAudioSessionOptions.mixWithOthers,
+            ],
+          ),
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: true,
+            contentType: AndroidContentType.sonification,
+            usageType: AndroidUsageType.alarm,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+        ),
+      );
+      
       await _alarmPlayer!.setVolume(1.0);
       await _alarmPlayer!.setReleaseMode(ReleaseMode.loop);
       await _alarmPlayer!.play(AssetSource('sounds/alarm.wav'));
@@ -1310,8 +1323,7 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
   }
 
   Widget _buildSessionChips() {
-    const chipWidth = 100.0; // Slightly wider for all chips
-    const chipPadding = EdgeInsets.symmetric(horizontal: 0, vertical: 2);
+    const chipWidth = 100.0;
     final labels = {
       SessionType.pomodoro: 'Pomodoro',
       SessionType.shortBreak: 'Short Break',
@@ -1321,29 +1333,23 @@ class _PomodoroTimerPageState extends State<PomodoroTimerPage> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: SessionType.values.map((s) {
         final selected = s == _current;
-        // All chips are now disabled (unclickable) for continuous flow
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: SizedBox(
+          child: Container(
             width: chipWidth,
-            child: ChoiceChip(
-              showCheckmark: false,
-              label: Text(
-                labels[s]!,
-                textAlign: TextAlign.center,
-              ),
-              selected: selected,
-              onSelected: null, // Disabled - no manual switching
-              selectedColor: _accent,
-              labelStyle: TextStyle(
-                color: selected ? Colors.white : Colors.black54,
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
+            decoration: BoxDecoration(
+              color: selected ? _accent : Colors.grey[300],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              labels[s]!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
-              backgroundColor: Colors.grey[300],
-              padding: chipPadding,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6)),
             ),
           ),
         );

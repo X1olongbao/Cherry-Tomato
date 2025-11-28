@@ -149,6 +149,8 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
     _loadBlockedApps();
     _loadNotificationState();
     _loadAppBlockerState();
+    // Scan apps on init to get proper display names for selected apps
+    _scanApps();
   }
 
   @override
@@ -850,6 +852,9 @@ class _PrivacySecurityPageState extends State<PrivacySecurityPage> {
                             if (index == 0) {
                               return GestureDetector(
                                 onTap: () async {
+                                  // Prevent double tap
+                                  if (_isAppPickerOpen) return;
+                                  
                                   if (_installedApps.isEmpty || _isScanning) {
                                     await _scanApps();
                                   }

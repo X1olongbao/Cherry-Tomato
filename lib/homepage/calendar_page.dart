@@ -4,6 +4,8 @@ import '../models/task.dart';
 import '../services/session_service.dart';
 import '../services/task_service.dart';
 import 'pomodoro_timer.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+
 
 class CalendarPage extends StatefulWidget {
   final List<Task> tasks;
@@ -673,62 +675,73 @@ class _CustomCalendarDialogState extends State<_CustomCalendarDialog> {
     final firstWeekday = firstDayOfMonth.weekday % 7; // 0 = Sunday
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        width: 300.w,
+        height: 420.h,
+        padding: EdgeInsets.all(10.w),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.max,
           children: [
             // Header with month/year and navigation
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.chevron_left),
+                  icon: Icon(Icons.chevron_left, size: 22.sp),
                   onPressed: _previousMonth,
+                  padding: EdgeInsets.all(4.w),
+                  constraints: BoxConstraints(),
                 ),
                 Text(
                   '${_monthName(_displayedMonth.month)} ${_displayedMonth.year}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.chevron_right),
+                  icon: Icon(Icons.chevron_right, size: 22.sp),
                   onPressed: _nextMonth,
+                  padding: EdgeInsets.all(4.w),
+                  constraints: BoxConstraints(),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 12.h),
             
             // Weekday headers
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
                   .map((day) => SizedBox(
-                        width: 40,
+                        width: 32.w,
                         child: Center(
                           child: Text(
                             day,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.grey,
+                              fontSize: 10.sp,
                             ),
                           ),
                         ),
                       ))
                   .toList(),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 4.h),
             
-            // Calendar grid
-            ...List.generate((daysInMonth + firstWeekday + 6) ~/ 7, (weekIndex) {
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(7, (dayIndex) {
-                  final dayNumber = weekIndex * 7 + dayIndex - firstWeekday + 1;
-                  
-                  if (dayNumber < 1 || dayNumber > daysInMonth) {
-                    return const SizedBox(width: 40, height: 40);
-                  }
+            // Calendar grid - always render 6 weeks for consistent size
+            SizedBox(
+              height: 210.h, // Fixed height: 6 weeks × (32h + 2w margin) = 204h + padding
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(6, (weekIndex) {
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: List.generate(7, (dayIndex) {
+                      final dayNumber = weekIndex * 7 + dayIndex - firstWeekday + 1;
+                      
+                      if (dayNumber < 1 || dayNumber > daysInMonth) {
+                        return SizedBox(width: 32.w, height: 32.h);
+                      }
                   
                   final date = DateTime(_displayedMonth.year, _displayedMonth.month, dayNumber);
                   final isSelected = date.year == _selectedDate.year &&
@@ -744,18 +757,18 @@ class _CustomCalendarDialogState extends State<_CustomCalendarDialog> {
                       setState(() => _selectedDate = date);
                     },
                     child: Container(
-                      width: 40,
-                      height: 40,
-                      margin: const EdgeInsets.all(2),
+                      width: 32.w,
+                      height: 32.h,
+                      margin: EdgeInsets.all(1.w),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? const Color(0xFFE53935)
                             : isToday
                                 ? const Color(0xFFE53935).withOpacity(0.1)
                                 : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6.r),
                         border: isToday && !isSelected
-                            ? Border.all(color: const Color(0xFFE53935), width: 1)
+                            ? Border.all(color: const Color(0xFFE53935), width: 1.w)
                             : null,
                       ),
                       child: Stack(
@@ -768,18 +781,19 @@ class _CustomCalendarDialogState extends State<_CustomCalendarDialog> {
                                     ? Colors.white
                                     : Colors.black,
                                 fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12.sp,
                               ),
                             ),
                           ),
                           if (hasTasks)
                             Positioned(
-                              bottom: 4,
+                              bottom: 2.h,
                               left: 0,
                               right: 0,
                               child: Center(
                                 child: Container(
-                                  width: 4,
-                                  height: 4,
+                                  width: 3.5.w,
+                                  height: 3.5.h,
                                   decoration: BoxDecoration(
                                     color: isSelected
                                         ? Colors.white
@@ -793,11 +807,13 @@ class _CustomCalendarDialogState extends State<_CustomCalendarDialog> {
                       ),
                     ),
                   );
+                    }),
+                  );
                 }),
-              );
-            }),
+              ),
+            ),
             
-            const SizedBox(height: 16),
+            Spacer(),
             
             // Action buttons
             Row(
@@ -805,16 +821,17 @@ class _CustomCalendarDialogState extends State<_CustomCalendarDialog> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text('Cancel', style: TextStyle(fontSize: 13.sp)),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 6.w),
                 ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(_selectedDate),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFE53935),
                     foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
                   ),
-                  child: const Text('Select'),
+                  child: Text('Select', style: TextStyle(fontSize: 13.sp)),
                 ),
               ],
             ),
