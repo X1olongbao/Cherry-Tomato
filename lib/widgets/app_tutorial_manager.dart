@@ -175,7 +175,7 @@ class AppTutorialManagerState extends State<AppTutorialManager> {
 
       // Step 15: Privacy & Security
       TutorialStep(
-        title: '� Privacy & Security',
+        title: '� Privacyc & Security',
         description:
             'In your Profile page, tap "Privacy & Security" to access important settings:\n\n• Change Password\n• Enable/Disable Notifications\n• App Blocker Settings\n• App Selection for blocking\n\nLet\'s explore the App Blocker feature in detail.',
         hasArrow: false,
@@ -233,6 +233,15 @@ class AppTutorialManagerState extends State<AppTutorialManager> {
         await _showWelcomeDialog();
       }
     }
+  }
+
+  /// Public method to restart the tutorial from any page
+  void restartTutorial() {
+    setState(() {
+      _currentStep = 0;
+      _showTutorial = true;
+      _isNavigating = false;
+    });
   }
 
   Future<void> _showWelcomeDialog() async {

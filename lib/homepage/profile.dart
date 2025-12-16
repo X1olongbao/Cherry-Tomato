@@ -6,6 +6,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:tomatonator/homepage/edit_profile_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tomatonator/services/profile_service.dart';
+import 'package:tomatonator/widgets/app_tutorial_manager.dart';
 
 const tomatoRed = Color(0xFFE53935);
 
@@ -93,34 +94,13 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 24),
 
               // Profile Picture
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.black12,
-                    backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
-                        ? NetworkImage(_avatarUrl!)
-                        : const AssetImage('assets/profile/profile_pic.png')
-                            as ImageProvider,
-                  ),
-                  Positioned(
-                    bottom: 4,
-                    right: 4,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt,
-                        color: Colors.black54,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: Colors.black12,
+                backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                    ? NetworkImage(_avatarUrl!)
+                    : const AssetImage('assets/profile/profile_pic.png')
+                        as ImageProvider,
               ),
 
               const SizedBox(height: 12),
@@ -193,6 +173,18 @@ class _ProfilePageState extends State<ProfilePage> {
               }),
               const SizedBox(height: 8),
               _buildListTile(Icons.lock_outline, "Privacy"),
+              const SizedBox(height: 8),
+              _buildListTile(Icons.help_outline, "Help & Tutorial", onTap: () {
+                // Restart the interactive tutorial
+                final tutorialManager = context.findAncestorStateOfType<AppTutorialManagerState>();
+                if (tutorialManager != null) {
+                  tutorialManager.restartTutorial();
+                  // Navigate to home to show tutorial
+                  if (widget.onBack != null) {
+                    widget.onBack!();
+                  }
+                }
+              }),
 
               const SizedBox(height: 40), // ✅ extra space before logout
 
